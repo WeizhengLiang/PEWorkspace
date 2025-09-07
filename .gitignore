@@ -98,6 +98,11 @@ StyleCopReport.xml
 *.svclog
 *.scc
 
+# Visual Studio project files (optional)
+*.vcxproj
+*.vcxproj.user
+*.vcxproj.filters
+
 # Chutzpah Test files
 _Chutzpah*
 
@@ -361,3 +366,21 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Auto-generated files
+Generated/
+Intermediate/
+DerivedDataCache/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# CMake / Build system (if used)
+CMakeFiles/
+CMakeCache.txt
+*.cmake
+Makefile
+
+# Ignore solution files if repo should contain only source
+*.sln
