@@ -384,3 +384,14 @@ Makefile
 
 # Ignore solution files if repo should contain only source
 *.sln
+
+# Reinclude the source handwritten Makefile if it exists
+!PEWorkspace/Code/lua_dist/src/Makefile
+!PEWorkspace/Code/luasocket_dist/src/makefile
+
+!PEWorkspace/Tools/Installer/Installer.sln
+
+!PEWorkspace/Python26/tcl/tix8.4.3/Makefile
+!PEWorkspace/Python26/tcl/tix8.4.3/pref/Makefile
+
+!PEWorkspace/External/
