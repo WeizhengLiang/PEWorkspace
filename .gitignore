@@ -386,6 +386,18 @@ Makefile
 *.sln
 
 # Reinclude the source handwritten Makefile if it exists
+
+# Allow Git to enter these folders
+!PEWorkspace/
+!PEWorkspace/Code/
+!PEWorkspace/Code/lua_dist/
+!PEWorkspace/Code/luasocket_dist/
+!PEWorkspace/Python26/
+!PEWorkspace/Python26/tcl/
+!PEWorkspace/Python26/tcl/tix8.4.3/
+!PEWorkspace/Python26/tcl/tix8.4.3/pref/
+
+
 !PEWorkspace/Code/lua_dist/src/Makefile
 !PEWorkspace/Code/luasocket_dist/src/makefile
 
