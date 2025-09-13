@@ -5,10 +5,10 @@
 function fillMetaInfoTable(args) -- the script fromat requires existance of this function
 
 -- user modifed data
-args['myScript']="WayPoint.lua"
-args['myScriptPackage']="CharacterControl"
+args['myScript']="StaticMesh.lua"
+args['myScriptPackage']="Default"
 
-args['name'] = '4'
-args['next'] = '5'
+args['meshName'] = "nazicar.x_carmesh_mesh.mesha"
+args['meshPackage'] = "Default"
 
 end -- required
