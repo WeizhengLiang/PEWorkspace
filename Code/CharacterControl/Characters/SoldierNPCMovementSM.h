@@ -19,6 +19,7 @@ struct SoldierNPCMovementSM_Event_MOVE_TO : public PE::Events::Event {
 	SoldierNPCMovementSM_Event_MOVE_TO(Vector3 targetPos = Vector3());
 
 	Vector3 m_targetPosition;
+	bool m_running;
 };
 
 struct SoldierNPCMovementSM_Event_STOP : public PE::Events::Event {
