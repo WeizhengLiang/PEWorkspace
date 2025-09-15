@@ -34,10 +34,13 @@ int Event_CREATE_WAYPOINT::l_Construct(lua_State* luaVM)
 
 	// get arguments from stack
 	int numArgs, numArgsConst;
-	numArgs = numArgsConst = 15;
+	numArgs = numArgsConst = 16;
 
 	const char* wayPointName = lua_tostring(luaVM, -numArgs--);
 	const char* nextWayPointName = lua_tostring(luaVM, -numArgs--);
+
+	int needToRun = (int)lua_tonumber(luaVM, -numArgs--);
+	pEvt->m_needToRunToThisWayPoint = needToRun;
 
 	float positionFactor = 1.0f / 100.0f;
 	Vector3 pos, u, v, n;
@@ -80,6 +83,8 @@ WayPoint::WayPoint(PE::GameContext &context, PE::MemoryArena arena, PE::Handle h
 {
 	StringOps::writeToString(pEvt->m_name, m_name, 32);
 	StringOps::writeToString(pEvt->m_nextWaypointName, m_nextWayPointName, 32);
+
+	m_needToRunToThisWayPoint = pEvt->m_needToRunToThisWayPoint;
 
 	m_base = pEvt->m_base;
 }
