@@ -70,15 +70,15 @@ void SoldierNPCBehaviorSM::do_SoldierNPCMovementSM_Event_TARGET_REACHED(PE::Even
 			WayPoint *pWP = pGameObjectManagerAddon->getWayPoint(m_curPatrolWayPoint);
 			if (pWP && StringOps::length(pWP->m_nextWayPointName) > 0)
 			{
+				// (wrong way, corrected with another approach, change waypoint lua in maya instead)
+				// assignment 2 task 1: ramdomly choose next waypoint 
+				//static char nextWayPoint[5]{'1', '2', '3', '4', '5'};
+				//int randIndex = rand() % 5;
+				//pWP->m_nextWayPointName[0] = nextWayPoint[randIndex];
+				
 				// have next waypoint to go to
-				//pWP = pGameObjectManagerAddon->getWayPoint(pWP->m_nextWayPointName);
-
-				// assignment 2 task 1: ramdomly choose next waypoint
-				static char nextWayPoint[5]{'1', '2', '3', '4', '5'};
-				int randIndex = rand() % 5;
-				pWP->m_nextWayPointName[0] = nextWayPoint[randIndex];
-
 				pWP = pGameObjectManagerAddon->getWayPoint(pWP->m_nextWayPointName);
+
 				if (pWP)
 				{
 					StringOps::writeToString(pWP->m_name, m_curPatrolWayPoint, 32);
