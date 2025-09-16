@@ -70,14 +70,60 @@ void SoldierNPCBehaviorSM::do_SoldierNPCMovementSM_Event_TARGET_REACHED(PE::Even
 			WayPoint *pWP = pGameObjectManagerAddon->getWayPoint(m_curPatrolWayPoint);
 			if (pWP && StringOps::length(pWP->m_nextWayPointName) > 0)
 			{
-				// (wrong way, corrected with another approach, change waypoint lua in maya instead)
-				// assignment 2 task 1: ramdomly choose next waypoint 
-				//static char nextWayPoint[5]{'1', '2', '3', '4', '5'};
-				//int randIndex = rand() % 5;
-				//pWP->m_nextWayPointName[0] = nextWayPoint[randIndex];
+				
+				// assignment 2 task 1: randomly choose next waypoint 
+				// Initialize random seed only once
+				static bool srandInitialized = false;
+				if (!srandInitialized) {
+					srand((unsigned)time(nullptr));
+					srandInitialized = true;
+				}
+
+				auto pickRandomFromList = [&](const char* inputList, char* output) {
+					// Copy input string because strtok modifies it
+					char buffer[32];
+					strncpy(buffer, inputList, sizeof(buffer));
+					buffer[sizeof(buffer) - 1] = '\0';
+
+					// Split by commas
+					char* tokens[16]; // up to 16 options
+					int count = 0;
+					char* token = strtok(buffer, ",");
+					while (token && count < 16) {
+						// Trim whitespace from token
+						while (*token == ' ' || *token == '\t') token++;
+						char* end = token + strlen(token) - 1;
+						while (end > token && (*end == ' ' || *end == '\t')) {
+							*end = '\0';
+							end--;
+						}
+						tokens[count++] = token;
+						token = strtok(nullptr, ",");
+					}
+
+					if (count > 0) {
+						// Randomly select one
+						int idx = rand() % count;
+
+						// Copy selected token to output
+						strncpy(output, tokens[idx], 31);
+						output[31] = '\0';
+					}
+					else {
+						// Nothing to choose from �� clear string
+						output[0] = '\0';
+					}
+				};
+
+				char selectedWaypoint[32];
+				pickRandomFromList(pWP->m_nextWayPointName, selectedWaypoint);
+
+				char debugMsg[64];
+				sprintf(debugMsg, "Next waypoint: %s\n", selectedWaypoint);
+				OutputDebugStringA(debugMsg);
 				
 				// have next waypoint to go to
-				pWP = pGameObjectManagerAddon->getWayPoint(pWP->m_nextWayPointName);
+				pWP = pGameObjectManagerAddon->getWayPoint(selectedWaypoint);
 
 				if (pWP)
 				{
