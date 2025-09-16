@@ -68,6 +68,27 @@ void ClientGameObjectManagerAddon::createSoldierNPC(Event_CreateSoldierNPC *pTru
 	addComponent(hSoldierNPC);
 }
 
+SoldierNPC *ClientGameObjectManagerAddon::getFirstTargetableSoldierObject()
+{
+	PE::Handle* pHC = m_components.getFirstPtr();
+	for (PrimitiveTypes::UInt32 i = 0; i < m_components.m_size; i++, pHC++)
+	{
+		Component* pC = (*pHC).getObject<Component>();
+		if (pC->isInstanceOf<SoldierNPC>())
+		{
+			SoldierNPC* pSoldier = static_cast<SoldierNPC*>(pC);
+			if (pSoldier->m_npcType == Events::TARGET)
+			{
+				return pSoldier;
+				/*SceneNode* pSN = pSoldier->getFirstComponent<SceneNode>();
+				if (pSN)
+					return pSN->m_base.getPos();*/
+			}
+		}
+	}
+	return nullptr; // Return zero vector if not found
+}
+
 void ClientGameObjectManagerAddon::do_CREATE_WAYPOINT(PE::Events::Event *pEvt)
 {
 	PEINFO("GameObjectManagerAddon::do_CREATE_WAYPOINT()\n");

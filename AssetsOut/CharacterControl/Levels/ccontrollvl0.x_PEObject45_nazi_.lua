@@ -19,4 +19,6 @@ args['npcType'] = 'Guard'
 
 args['patrolWayPoint'] = '1'
 
+args['lookForTargetAndShoot'] = 0
+
 end -- required

@@ -25,7 +25,7 @@ int Event_CreateSoldierNPC::l_Construct(lua_State* luaVM)
 	
 	// get arguments from stack
 	int numArgs, numArgsConst;
-	numArgs = numArgsConst = 19;
+	numArgs = numArgsConst = 21;
 
 	PE::GameContext *pContext = (PE::GameContext*)(lua_touserdata(luaVM, -numArgs--));
 
@@ -37,6 +37,9 @@ int Event_CreateSoldierNPC::l_Construct(lua_State* luaVM)
 
 	const char* gunMeshName = lua_tostring(luaVM, -numArgs--);
 	const char* gunMeshPackage = lua_tostring(luaVM, -numArgs--);
+
+	int shootTarget = (int)lua_tonumber(luaVM, -numArgs--);
+	pEvt->m_lookForTargetAndShoot = shootTarget;
 
 	float positionFactor = 1.0f / 100.0f;
 
@@ -61,6 +64,12 @@ int Event_CreateSoldierNPC::l_Construct(lua_State* luaVM)
 	else
 		// ignore
 		numArgs--;
+
+	const char* npcTypeStr = lua_tostring(luaVM, -numArgs--);
+	int npcTypeInt = 0;
+	if (strcmp(npcTypeStr, "Guard") == 0) npcTypeInt = Events::GUARD;
+	else if (strcmp(npcTypeStr, "Target") == 0) npcTypeInt = Events::TARGET;
+	pEvt->m_npcType = npcTypeInt;
 
 
 	// set data values before popping memory off stack

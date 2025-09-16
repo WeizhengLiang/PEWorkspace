@@ -98,6 +98,21 @@ void SoldierNPCBehaviorSM::do_SoldierNPCMovementSM_Event_TARGET_REACHED(PE::Even
 			{
 				m_state = IDLE;
 				// no need to send the event. movement state machine will automatically send event to animation state machine to play idle animation
+				if (m_shouldLookForTargetAndShoot) {
+
+					SoldierNPC *targetPtr = pGameObjectManagerAddon->getFirstTargetableSoldierObject();
+
+					PE::Handle h("SoldierNPCMovementSM_Event_STOP", sizeof(SoldierNPCMovementSM_Event_STOP));
+					SoldierNPCMovementSM_Event_STOP* pEvt = new(h) SoldierNPCMovementSM_Event_STOP();
+
+					pEvt->m_targetPtr = targetPtr;
+					pEvt->m_standShoot = m_shouldLookForTargetAndShoot;
+
+					m_hMovementSM.getObject<Component>()->handleEvent(pEvt);
+					// release memory now that event is processed
+					h.release();
+					
+				}
 			}
 		}
 	}
@@ -170,13 +185,33 @@ void SoldierNPCBehaviorSM::do_UPDATE(PE::Events::Event *pEvt)
 		{
 			// should not happen, but in any case, set state to idle
 			m_state = IDLE;
+			if (m_shouldLookForTargetAndShoot) {
+				ClientGameObjectManagerAddon* pGameObjectManagerAddon = (ClientGameObjectManagerAddon*)(m_pContext->get<CharacterControlContext>()->getGameObjectManagerAddon());
+				if (pGameObjectManagerAddon) {
 
-			PE::Handle h("SoldierNPCMovementSM_Event_STOP", sizeof(SoldierNPCMovementSM_Event_STOP));
-			SoldierNPCMovementSM_Event_STOP *pEvt = new(h) SoldierNPCMovementSM_Event_STOP();
+					SoldierNPC *targetPtr= pGameObjectManagerAddon->getFirstTargetableSoldierObject();
 
-			m_hMovementSM.getObject<Component>()->handleEvent(pEvt);
-			// release memory now that event is processed
-			h.release();
+					PE::Handle h("SoldierNPCMovementSM_Event_STOP", sizeof(SoldierNPCMovementSM_Event_STOP));
+					SoldierNPCMovementSM_Event_STOP* pEvt = new(h) SoldierNPCMovementSM_Event_STOP();
+
+					pEvt->m_targetPtr = targetPtr;
+					pEvt->m_standShoot = m_shouldLookForTargetAndShoot;
+
+					m_hMovementSM.getObject<Component>()->handleEvent(pEvt);
+					// release memory now that event is processed
+					h.release();
+				}
+			}
+			else 
+			{
+				PE::Handle h("SoldierNPCMovementSM_Event_STOP", sizeof(SoldierNPCMovementSM_Event_STOP));
+				SoldierNPCMovementSM_Event_STOP* pEvt = new(h) SoldierNPCMovementSM_Event_STOP();
+
+				m_hMovementSM.getObject<Component>()->handleEvent(pEvt);
+				// release memory now that event is processed
+				h.release();
+			}
+
 		}
 	}
 }

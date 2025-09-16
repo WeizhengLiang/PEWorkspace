@@ -16,15 +16,23 @@ function runScript(args)
     local u = args['base']['u']
     local v = args['base']['v']
     local n = args['base']['n']
+
+    local lookForTargetAndShoot = 0
+    if args['lookForTargetAndShoot'] ~= nil then
+        lookForTargetAndShoot = args['lookForTargetAndShoot']
+    end
+
     evt = root.CharacterControl.Events.Event_CreateSoldierNPC.Construct(l_getGameContext(),
         args['skinName'], args['skinPackage'], 
         args['gunMeshName'], args['gunMeshPackage'],
+        lookForTargetAndShoot,
         pos[1], pos[2], pos[3],
         u[1], u[2], u[3],
         v[1], v[2], v[3],
         n[1], n[2], n[3],
         args['peuuid'],
-        args['patrolWayPoint'] -- could be nil
+        args['patrolWayPoint'], -- could be nil
+        args['npcType'] 
     )
     handler = getGameObjectManagerHandle(l_getGameContext())
     root.PE.Components.Component.SendEventToHandle(handler, evt)

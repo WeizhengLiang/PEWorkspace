@@ -7,6 +7,11 @@ namespace CharacterControl
 {
 namespace Events
 {
+	enum NPCType {
+		GUARD = 0,
+		TARGET = 1,
+		// ...
+	};
 struct Event_CreateSoldierNPC : public PE::Events::Event_CREATE_MESH
 {
 	PE_DECLARE_CLASS(Event_CreateSoldierNPC);
@@ -22,6 +27,7 @@ struct Event_CreateSoldierNPC : public PE::Events::Event_CREATE_MESH
 	char m_gunMeshName[64];
 	char m_gunMeshPackage[64];
 	char m_patrolWayPoint[32];
+	int m_lookForTargetAndShoot; // if true, npc will look for target and shoot if it sees one
 };
 
 struct Event_MoveTank_C_to_S : public PE::Events::Event, public PE::Networkable

@@ -61,6 +61,8 @@ SoldierNPC::SoldierNPC(PE::GameContext &context, PE::MemoryArena arena, PE::Hand
 	pMainSN->m_base.setV(pEvt->m_v);
 	pMainSN->m_base.setN(pEvt->m_n);
 
+	m_lookForTargetAndShoot = pEvt->m_lookForTargetAndShoot > 0;
+	m_npcType = pEvt->m_npcType;
 
 	RootSceneNode::Instance()->addComponent(hSN);
 
@@ -162,6 +164,9 @@ SoldierNPC::SoldierNPC(PE::GameContext &context, PE::MemoryArena arena, PE::Hand
 
 	StringOps::writeToString(pEvt->m_patrolWayPoint, pSoldierBehaviorSM->m_curPatrolWayPoint, 32);
 	pSoldierBehaviorSM->m_havePatrolWayPoint = StringOps::length(pSoldierBehaviorSM->m_curPatrolWayPoint) > 0;
+
+	pSoldierBehaviorSM->m_lookForTargetAndShoot = pEvt->m_lookForTargetAndShoot;
+	pSoldierBehaviorSM->m_shouldLookForTargetAndShoot = pSoldierBehaviorSM->m_lookForTargetAndShoot > 0;
 
 	// start the soldier
 	pSoldierBehaviorSM->start();
