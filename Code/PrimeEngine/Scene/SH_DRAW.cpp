@@ -318,7 +318,7 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 				testTransform, 
 				&testLineData[0].m_x, 
 				2, // 2 points
-				60.0f,  // 60 second lifetime
+				0.1f,  // 0.1 second lifetime (refreshes every frame)
 				1.0f
 			);
 			printf("  -> TEST LINE created at (0,5,0) to (10,5,0) - RED color\n");
@@ -346,7 +346,7 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 						instanceWorldMatrix,  // Use the SAME world matrix as the imrod
 						&worldTestLineData[0].m_x, 
 						2, // 2 points
-						60.0f,  // 60 second lifetime
+						0.1f,  // 0.1 second lifetime (refreshes every frame)
 						1.0f
 					);
 					printf("  -> WORLD TEST LINE created at imrod world pos (%.2f, %.2f, %.2f) - CYAN color\n", 
@@ -367,7 +367,7 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 						identityTransform,  // No transformation
 						&noTransformLineData[0].m_x, 
 						2, // 2 points
-						60.0f,  // 60 second lifetime
+						0.1f,  // 0.1 second lifetime (refreshes every frame)
 						1.0f
 					);
 					printf("  -> NO-TRANSFORM TEST LINE created at world pos (%.2f, %.2f, %.2f) - YELLOW color\n", 
@@ -416,7 +416,7 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 						instanceWorldMatrix,  // Use the SAME world matrix as the imrod
 						&simpleBoxData[0].m_x, 
 						boxPointIndex, 
-						60.0f,  // 60 second lifetime
+						0.1f,  // 0.1 second lifetime (refreshes every frame)
 						1.0f
 					);
 					printf("  -> SIMPLE BOX created at imrod world pos (%.2f, %.2f, %.2f) - CYAN color\n", 
@@ -516,7 +516,7 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 						identityMatrix,  // Use identity matrix since corners are already in world space
 						&lineData[0].m_x, 
 						pointIndex, 
-						60.0f,  // Set lifetime to 60 seconds (persistent AABB lines)
+						0.1f,  // Set lifetime to 0.1 seconds (very short, refreshes every frame)
 						1.0f
 					);
 					printf("  -> Imrod AABB lines created for instance %d! (world pos: %.2f, %.2f, %.2f)\n", 
