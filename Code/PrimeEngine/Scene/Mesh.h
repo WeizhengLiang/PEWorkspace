@@ -67,6 +67,22 @@ struct Mesh : public Component
 	void popEffects();
 
 	PrimitiveTypes::Bool hasPushedEffects();
+	
+	// AABB access methods
+	const PE::AABB& getLocalAABB() const { return m_localAABB; }
+	PrimitiveTypes::Bool hasAABB() const { return m_aabbValid; }
+	void setAABB(const PE::AABB& aabb) { m_localAABB = aabb; m_aabbValid = true; }
+	
+	// Mesh name for debugging
+	const char* getMeshName() const { return m_meshName; }
+	void setMeshName(const char* name) { 
+		if (name) {
+			strncpy(m_meshName, name, sizeof(m_meshName) - 1);
+			m_meshName[sizeof(m_meshName) - 1] = '\0';
+		} else {
+			m_meshName[0] = '\0';
+		}
+	}
 	// Member variables --------------------------------------------------------
 	//Handle m_hVertexBufferGPU;
 	Handle m_hTexCoordBufferCPU;
@@ -100,6 +116,13 @@ struct Mesh : public Component
 	bool m_bDrawControl;
     
     bool m_performBoundingVolumeCulling;
+    
+    // AABB data for debug rendering
+    PE::AABB m_localAABB;
+    PrimitiveTypes::Bool m_aabbValid;
+    
+    // Mesh name for debugging
+    char m_meshName[64];
 };
 
 }; // namespace Components

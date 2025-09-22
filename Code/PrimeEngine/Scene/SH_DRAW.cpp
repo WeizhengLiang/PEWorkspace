@@ -18,6 +18,7 @@
 // Sibling/Children includes
 #include "Mesh.h"
 #include "MeshInstance.h"
+#include "DebugRenderer.h"
 #include "SkeletonInstance.h"
 #include "SceneNode.h"
 #include "RootSceneNode.h"
@@ -181,6 +182,24 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 	// and this object is current distributor
 	Component *pCaller = pEvt->m_prevDistributor.getObject<Component>();
 	Mesh *pMeshCaller = (Mesh *)pCaller;
+	
+#ifdef _DEBUG
+	// Debug output to see what meshes are being processed
+	printf("DEBUG: Processing mesh '%s' [%p] with %d instances, hasAABB: %s\n", 
+		pMeshCaller->getMeshName(), pMeshCaller, pMeshCaller->m_instances.m_size, 
+		pMeshCaller->hasAABB() ? "true" : "false");
+	
+	// More detailed AABB info if available
+	if (pMeshCaller->hasAABB()) {
+		const PE::AABB& aabb = pMeshCaller->getLocalAABB();
+		printf("  -> AABB center: (%.2f, %.2f, %.2f), extents: (%.2f, %.2f, %.2f)\n", 
+			aabb.center.m_x, aabb.center.m_y, aabb.center.m_z,
+			aabb.extents.m_x, aabb.extents.m_y, aabb.extents.m_z);
+	} else {
+		printf("  -> No AABB data available for mesh '%s' [%p]\n", pMeshCaller->getMeshName(), pMeshCaller);
+	}
+#endif
+	
 	if (pMeshCaller->m_instances.m_size == 0)
 		return; // no instances of this mesh
 	Events::Event_GATHER_DRAWCALLS *pDrawEvent = NULL;
@@ -268,6 +287,268 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 		worldMatrix = hParentSN.getObject<SceneNode>()->m_worldTransform;
 	
 	projectionViewWorldMatrix = projectionViewWorldMatrix * worldMatrix;
+
+#ifdef _DEBUG
+	// Add AABB debug rendering ONLY for imrod mesh + test line
+	if (pMeshCaller->hasAABB() && strstr(pMeshCaller->getMeshName(), "imrod.x_imrodmesh_mesh.mesha")) 
+	{
+		// Debug output to verify this is being called
+		printf("DEBUG: Rendering AABB for SPECIFIC mesh '%s' [%p] with %d instances\n", pMeshCaller->getMeshName(), pMeshCaller, pMeshCaller->m_instances.m_size);
+		printf("  -> DrawEvent type: %s\n", pDrawEvent ? "GATHER_DRAWCALLS" : "GATHER_DRAWCALLS_Z_ONLY");
+		
+		// Get the DebugRenderer instance
+		PE::Components::DebugRenderer* pDebugRenderer = PE::Components::DebugRenderer::Instance();
+		if (pDebugRenderer)
+		{
+			printf("  -> DebugRenderer found, creating AABB lines for imrod mesh...\n");
+			
+			// FIRST: Create a simple test line to verify debug lines work at all
+			Vector3 testLineData[4]; // 2 points * 2 (position + color)
+			testLineData[0] = Vector3(0.0f, 0.0f, 0.0f);  // start position
+			testLineData[1] = Vector3(1.0f, 0.0f, 0.0f);  // red color
+			testLineData[2] = Vector3(10.0f, 0.0f, 0.0f); // end position  
+			testLineData[3] = Vector3(1.0f, 0.0f, 0.0f);  // red color
+			
+			Matrix4x4 testTransform;
+			testTransform.loadIdentity();
+			testTransform.setPos(Vector3(0.0f, 5.0f, 0.0f)); // 5 units above origin
+			
+			pDebugRenderer->createLineMesh(
+				true, 
+				testTransform, 
+				&testLineData[0].m_x, 
+				2, // 2 points
+				60.0f,  // 60 second lifetime
+				1.0f
+			);
+			printf("  -> TEST LINE created at (0,5,0) to (10,5,0) - RED color\n");
+
+			// TEST: Create a line at the EXACT world position of the first imrod instance
+			// This will test if local-to-world transformation is working
+			if (pMeshCaller->m_instances.m_size > 0)
+			{
+				MeshInstance *pFirstInst = pMeshCaller->m_instances[0].getObject<MeshInstance>();
+				Handle hInstanceParentSN = pFirstInst->getFirstParentByType<SceneNode>();
+				if (hInstanceParentSN.isValid())
+				{
+					Matrix4x4 instanceWorldMatrix = hInstanceParentSN.getObject<SceneNode>()->m_worldTransform;
+					Vector3 worldPos = instanceWorldMatrix.getPos();
+					
+					// Create a test line at the EXACT world position of the imrod
+					Vector3 worldTestLineData[4]; // 2 points * 2 (position + color)
+					worldTestLineData[0] = Vector3(0.0f, 0.0f, 0.0f);  // local start (will be transformed)
+					worldTestLineData[1] = Vector3(0.0f, 1.0f, 0.0f);  // cyan color
+					worldTestLineData[2] = Vector3(2.0f, 0.0f, 0.0f);  // local end (will be transformed)
+					worldTestLineData[3] = Vector3(0.0f, 1.0f, 0.0f);  // cyan color
+					
+					pDebugRenderer->createLineMesh(
+						true, 
+						instanceWorldMatrix,  // Use the SAME world matrix as the imrod
+						&worldTestLineData[0].m_x, 
+						2, // 2 points
+						60.0f,  // 60 second lifetime
+						1.0f
+					);
+					printf("  -> WORLD TEST LINE created at imrod world pos (%.2f, %.2f, %.2f) - CYAN color\n", 
+						worldPos.m_x, worldPos.m_y, worldPos.m_z);
+					
+					// Also create a line WITHOUT transformation to compare
+					Vector3 noTransformLineData[4]; // 2 points * 2 (position + color)
+					noTransformLineData[0] = worldPos;  // start at world position
+					noTransformLineData[1] = Vector3(1.0f, 1.0f, 0.0f);  // yellow color
+					noTransformLineData[2] = worldPos + Vector3(2.0f, 0.0f, 0.0f);  // end at world position + offset
+					noTransformLineData[3] = Vector3(1.0f, 1.0f, 0.0f);  // yellow color
+					
+					Matrix4x4 identityTransform;
+					identityTransform.loadIdentity();
+					
+					pDebugRenderer->createLineMesh(
+						true, 
+						identityTransform,  // No transformation
+						&noTransformLineData[0].m_x, 
+						2, // 2 points
+						60.0f,  // 60 second lifetime
+						1.0f
+					);
+					printf("  -> NO-TRANSFORM TEST LINE created at world pos (%.2f, %.2f, %.2f) - YELLOW color\n", 
+						worldPos.m_x, worldPos.m_y, worldPos.m_z);
+					
+					// TEST: Create a simple box at imrod position to test box rendering
+					Vector3 simpleBoxData[48]; // 12 lines * 4 values per line
+					Vector3 boxColor(0.0f, 1.0f, 1.0f); // CYAN color for simple box
+					
+					// Create a simple 2x2x2 box centered at origin
+					Vector3 boxMin(-1.0f, -1.0f, -1.0f);
+					Vector3 boxMax(1.0f, 1.0f, 1.0f);
+					
+					// Define 8 corners of the simple box
+					Vector3 boxCorners[8] = {
+						Vector3(boxMin.m_x, boxMin.m_y, boxMin.m_z), // 0
+						Vector3(boxMax.m_x, boxMin.m_y, boxMin.m_z), // 1
+						Vector3(boxMax.m_x, boxMax.m_y, boxMin.m_z), // 2
+						Vector3(boxMin.m_x, boxMax.m_y, boxMin.m_z), // 3
+						Vector3(boxMin.m_x, boxMin.m_y, boxMax.m_z), // 4
+						Vector3(boxMax.m_x, boxMin.m_y, boxMax.m_z), // 5
+						Vector3(boxMax.m_x, boxMax.m_y, boxMax.m_z), // 6
+						Vector3(boxMin.m_x, boxMax.m_y, boxMax.m_z)  // 7
+					};
+					
+					// Define 12 lines for the box wireframe
+					int boxLineIndices[12][2] = {
+						{0,1}, {1,2}, {2,3}, {3,0}, // bottom face
+						{4,5}, {5,6}, {6,7}, {7,4}, // top face
+						{0,4}, {1,5}, {2,6}, {3,7}  // vertical edges
+					};
+					
+					int boxPointIndex = 0;
+					for (int k = 0; k < 12; k++) {
+						Vector3 start = boxCorners[boxLineIndices[k][0]];
+						Vector3 end = boxCorners[boxLineIndices[k][1]];
+						
+						simpleBoxData[boxPointIndex++] = start;  // position
+						simpleBoxData[boxPointIndex++] = boxColor;  // color
+						simpleBoxData[boxPointIndex++] = end;    // position
+						simpleBoxData[boxPointIndex++] = boxColor;  // color
+					}
+					
+					pDebugRenderer->createLineMesh(
+						true, 
+						instanceWorldMatrix,  // Use the SAME world matrix as the imrod
+						&simpleBoxData[0].m_x, 
+						boxPointIndex, 
+						60.0f,  // 60 second lifetime
+						1.0f
+					);
+					printf("  -> SIMPLE BOX created at imrod world pos (%.2f, %.2f, %.2f) - CYAN color\n", 
+						worldPos.m_x, worldPos.m_y, worldPos.m_z);
+				}
+			}
+			
+			// SECOND: Create AABB debug lines for imrod mesh instances
+			for (int iInst = 0; iInst < pMeshCaller->m_instances.m_size; iInst++)
+			{
+				MeshInstance *pInst = pMeshCaller->m_instances[iInst].getObject<MeshInstance>();
+				if (pInst->m_culledOut)
+					continue;
+				
+				// Get the world transform for THIS specific instance
+				Handle hInstanceParentSN = pInst->getFirstParentByType<SceneNode>();
+				if (!hInstanceParentSN.isValid())
+				{
+					// allow skeleton to be in chain
+					SkeletonInstance *pParentSkelInstance = pInst->getFirstParentByTypePtr<SkeletonInstance>();
+					if (pParentSkelInstance)
+					{
+						hInstanceParentSN = pParentSkelInstance->getFirstParentByType<SceneNode>();
+					}
+				}
+				
+				if (hInstanceParentSN.isValid())
+				{
+					Matrix4x4 instanceWorldMatrix = hInstanceParentSN.getObject<SceneNode>()->m_worldTransform;
+					
+					printf("  -> Imrod Instance %d world position: (%.2f, %.2f, %.2f)\n", iInst,
+						instanceWorldMatrix.getPos().m_x, instanceWorldMatrix.getPos().m_y, instanceWorldMatrix.getPos().m_z);
+					
+					// Create AABB debug lines using the Mesh's AABB data
+					Vector3 lineData[48]; // 24 points * 2 (position + color)
+					
+					// Create debug lines from the AABB data
+					const PE::AABB& aabb = pMeshCaller->getLocalAABB();
+					Vector3 min = aabb.min();
+					Vector3 max = aabb.max();
+					
+					printf("  -> AABB LOCAL data: min(%.2f,%.2f,%.2f) max(%.2f,%.2f,%.2f) center(%.2f,%.2f,%.2f) extents(%.2f,%.2f,%.2f)\n",
+						min.m_x, min.m_y, min.m_z, max.m_x, max.m_y, max.m_z,
+						aabb.center.m_x, aabb.center.m_y, aabb.center.m_z,
+						aabb.extents.m_x, aabb.extents.m_y, aabb.extents.m_z);
+					
+					// Define the 8 corners of the AABB in LOCAL space
+					Vector3 localCorners[8] = {
+						Vector3(min.m_x, min.m_y, min.m_z), // 0: min corner
+						Vector3(max.m_x, min.m_y, min.m_z), // 1: min corner + x
+						Vector3(max.m_x, max.m_y, min.m_z), // 2: min corner + x + y
+						Vector3(min.m_x, max.m_y, min.m_z), // 3: min corner + y
+						Vector3(min.m_x, min.m_y, max.m_z), // 4: min corner + z
+						Vector3(max.m_x, min.m_y, max.m_z), // 5: min corner + x + z
+						Vector3(max.m_x, max.m_y, max.m_z), // 6: max corner
+						Vector3(min.m_x, max.m_y, max.m_z)  // 7: min corner + y + z
+					};
+					
+					// Transform corners to WORLD space using the instance's world matrix
+					Vector3 worldCorners[8];
+					for (int i = 0; i < 8; i++) {
+						worldCorners[i] = instanceWorldMatrix * localCorners[i];  // Use operator * instead of transform()
+					}
+					
+					printf("  -> AABB WORLD corners: [0](%.2f,%.2f,%.2f) [6](%.2f,%.2f,%.2f)\n",
+						worldCorners[0].m_x, worldCorners[0].m_y, worldCorners[0].m_z,
+						worldCorners[6].m_x, worldCorners[6].m_y, worldCorners[6].m_z);
+
+					// Define the 12 lines (each line connects 2 corners)
+					int lineIndices[12][2] = {
+						{0,1}, {1,2}, {2,3}, {3,0}, // bottom face
+						{4,5}, {5,6}, {6,7}, {7,4}, // top face
+						{0,4}, {1,5}, {2,6}, {3,7}  // vertical edges
+					};
+
+					// Debug color (bright magenta for AABB to distinguish from coordinate axes)
+					Vector3 color(1.0f, 0.0f, 1.0f);  // MAGENTA color
+
+					int pointIndex = 0;
+					for (int k = 0; k < 12; k++) {
+						Vector3 start = worldCorners[lineIndices[k][0]];  // Use WORLD corners
+						Vector3 end = worldCorners[lineIndices[k][1]];    // Use WORLD corners
+						
+						// Each line segment: [position, color] pair
+						lineData[pointIndex++] = start;  // position
+						lineData[pointIndex++] = color;  // color
+						lineData[pointIndex++] = end;    // position
+						lineData[pointIndex++] = color;  // color
+					}
+					
+					// Create the AABB lines WITHOUT additional transformation since we already transformed to world space
+					Matrix4x4 identityMatrix;
+					identityMatrix.loadIdentity();
+					
+					pDebugRenderer->createLineMesh(
+						true, 
+						identityMatrix,  // Use identity matrix since corners are already in world space
+						&lineData[0].m_x, 
+						pointIndex, 
+						60.0f,  // Set lifetime to 60 seconds (persistent AABB lines)
+						1.0f
+					);
+					printf("  -> Imrod AABB lines created for instance %d! (world pos: %.2f, %.2f, %.2f)\n", 
+						iInst, instanceWorldMatrix.getPos().m_x, instanceWorldMatrix.getPos().m_y, instanceWorldMatrix.getPos().m_z);
+				}
+				else
+				{
+					printf("  -> WARNING: Imrod Instance %d has no valid parent SceneNode\n", iInst);
+				}
+			}
+		}
+		else
+		{
+			printf("  -> ERROR: DebugRenderer not found for mesh '%s' [%p]!\n", pMeshCaller->getMeshName(), pMeshCaller);
+		}
+	}
+	else if (pMeshCaller->hasAABB())
+	{
+		printf("DEBUG: Skipping AABB rendering for mesh '%s' [%p] - not imrod mesh\n", pMeshCaller->getMeshName(), pMeshCaller);
+	}
+	else
+	{
+		printf("DEBUG: Skipping AABB rendering for mesh '%s' [%p] - mesh has no AABB data\n", pMeshCaller->getMeshName(), pMeshCaller);
+	}
+#endif
+
+#ifdef _DEBUG
+	// Summary of mesh processing
+	printf("DEBUG: Finished processing mesh '%s' [%p] - %d instances, AABB rendered: %s\n", 
+		pMeshCaller->getMeshName(), pMeshCaller, pMeshCaller->m_instances.m_size, 
+		pMeshCaller->hasAABB() ? "YES" : "NO");
+#endif
 
 	// draw all pixel ranges with different materials
 	PrimitiveTypes::UInt32 numRanges = MeshHelpers::getNumberOfRangeCalls(pibGPU);

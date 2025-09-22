@@ -356,8 +356,52 @@ int ClientGame::runGameFrame()
 				//debug draw root and grid
 				DebugRenderer::Instance()->createRootLineMesh();// send event while the array is on the stack
 
+				// TEST: Create a simple debug line to verify the system works
+				Vector3 testLineData[4]; // 2 points * 2 (position + color)
+				testLineData[0] = Vector3(0.0f, 0.0f, 0.0f);  // start position
+				testLineData[1] = Vector3(0.0f, 1.0f, 0.0f);  // green color
+				testLineData[2] = Vector3(5.0f, 0.0f, 0.0f);  // end position  
+				testLineData[3] = Vector3(0.0f, 1.0f, 0.0f);  // green color
+				
+				Matrix4x4 testTransform;
+				testTransform.loadIdentity();
+				testTransform.setPos(Vector3(0.0f, 10.0f, 0.0f)); // 10 units above origin
+				
+				DebugRenderer::Instance()->createLineMesh(
+					true, 
+					testTransform, 
+					&testLineData[0].m_x, 
+					2, // 2 points
+					60.0f,  // 60 second lifetime
+					1.0f
+				);
+				printf("DEBUG: Created TEST LINE at (0,10,0) to (5,10,0) - GREEN color\n");
+
+				// TEST: Create a purple line from origin at 45 degrees between x and y axes
+				Vector3 purpleLineData[4]; // 2 points * 2 (position + color)
+				purpleLineData[0] = Vector3(0.0f, 0.0f, 0.0f);  // start at origin
+				purpleLineData[1] = Vector3(1.0f, 0.0f, 1.0f);  // purple color (red + blue)
+				purpleLineData[2] = Vector3(5.0f, 5.0f, 0.0f);  // end at 45 degrees (equal x and y)
+				purpleLineData[3] = Vector3(1.0f, 0.0f, 1.0f);  // purple color (red + blue)
+				
+				Matrix4x4 purpleTransform;
+				purpleTransform.loadIdentity();
+				// No translation needed - line starts from origin
+				
+				DebugRenderer::Instance()->createLineMesh(
+					true, 
+					purpleTransform, 
+					&purpleLineData[0].m_x, 
+					2, // 2 points
+					60.0f,  // 60 second lifetime
+					1.0f
+				);
+				printf("DEBUG: Created PURPLE LINE from origin (0,0,0) to (5,5,0) - 45 degree angle\n");
+
 				// call this to potentially generate meshes that were scheduled in debug draw of lines
+				printf("DEBUG: About to call DebugRenderer::postPreDraw\n");
 				DebugRenderer::Instance()->postPreDraw(m_pContext->m_gameThreadThreadOwnershipMask);
+				printf("DEBUG: Finished calling DebugRenderer::postPreDraw\n");
 
                 PE::IRenderer::checkForErrors("");
 

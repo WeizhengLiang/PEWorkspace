@@ -27,8 +27,8 @@ PE_IMPLEMENT_CLASS1(LineMesh, Mesh);
 
 void LineMesh::addDefaultComponents()
 {
-	//add this handler before Mesh's handlers so we can intercept draw and modify transform
-	PE_REGISTER_EVENT_HANDLER(Events::Event_GATHER_DRAWCALLS, LineMesh::do_GATHER_DRAWCALLS);
+	// LineMesh doesn't need to override do_GATHER_DRAWCALLS
+	// The event will be handled by SingleHandler_DRAW component automatically
 	Mesh::addDefaultComponents();
 }
 
@@ -108,10 +108,9 @@ void LineMesh::loadFrom3DPoints_needsRC(float *vals, int numPoints, const char *
 	}
 }
 
-void LineMesh::do_GATHER_DRAWCALLS(Events::Event *pEvt)
-{
-
-}
+// LineMesh doesn't need to override do_GATHER_DRAWCALLS
+// The event will be handled by SingleHandler_DRAW component automatically
+// through the Component::handleEvent -> distributeEvtToQueue mechanism
 
 
 }; // namespace Components

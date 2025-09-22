@@ -36,6 +36,8 @@ Mesh::Mesh(PE::GameContext &context, PE::MemoryArena arena, Handle hMyself)
 {
 	m_processShowEvt = true;
     m_performBoundingVolumeCulling = false;
+    m_aabbValid = false;
+    m_meshName[0] = '\0'; // Initialize mesh name
 }
 
 
@@ -200,6 +202,22 @@ void Mesh::loadFromMeshCPU_needsRC(MeshCPU &mcpu, int &threadOwnershipMask)
 	// Draw controls -------------------------------------------------------
 	m_bDrawControl = true;
 	EPEVertexFormat format = updateGeoFromMeshCPU_needsRC(mcpu, threadOwnershipMask);
+	
+	// Copy AABB data from MeshCPU
+	if (mcpu.hasAABB()) {
+		m_localAABB = mcpu.localAABB();
+		m_aabbValid = true;
+#ifdef _DEBUG
+		printf("MESH '%s' [%p]: Copied AABB data from MeshCPU - center: (%.2f, %.2f, %.2f), extents: (%.2f, %.2f, %.2f)\n", 
+			m_meshName, this, m_localAABB.center.m_x, m_localAABB.center.m_y, m_localAABB.center.m_z,
+			m_localAABB.extents.m_x, m_localAABB.extents.m_y, m_localAABB.extents.m_z);
+#endif
+	} else {
+		m_aabbValid = false;
+#ifdef _DEBUG
+		printf("MESH '%s' [%p]: No AABB data to copy from MeshCPU\n", m_meshName, this);
+#endif
+	}
 	/*
 	// Index Buffer --------------------------------------------------------
 	m_hIndexBufferGPU = VertexBufferGPUManager::Instance()->createIndexGPUBuffer(mcpu.m_hIndexBufferCPU, !mcpu.m_manualBufferManagement);
