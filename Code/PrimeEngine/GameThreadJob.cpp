@@ -400,6 +400,20 @@ int ClientGame::runGameFrame()
 
 				// call this to potentially generate meshes that were scheduled in debug draw of lines
 				printf("DEBUG: About to call DebugRenderer::postPreDraw\n");
+				
+				// Add a simple test line to verify debug rendering works
+				PE::Components::DebugRenderer* pDebugRenderer = PE::Components::DebugRenderer::Instance();
+				if (pDebugRenderer) {
+					Vector3 testLine[4] = {
+						Vector3(0.0f, 0.0f, 0.0f), Vector3(1.0f, 0.0f, 0.0f), // Red
+						Vector3(5.0f, 0.0f, 0.0f), Vector3(1.0f, 0.0f, 0.0f)  // Red
+					};
+					Matrix4x4 identity;
+					identity.loadIdentity();
+					printf("DEBUG: Creating simple test line in GameThreadJob\n");
+					pDebugRenderer->createLineMesh(true, identity, &testLine[0].m_x, 2, 10.0f, 1.0f);
+				}
+				
 				DebugRenderer::Instance()->postPreDraw(m_pContext->m_gameThreadThreadOwnershipMask);
 				printf("DEBUG: Finished calling DebugRenderer::postPreDraw\n");
 

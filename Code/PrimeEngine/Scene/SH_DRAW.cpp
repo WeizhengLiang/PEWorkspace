@@ -25,6 +25,7 @@
 #include "DrawList.h"
 #include "PrimeEngine/Scene/DefaultAnimationSM.h"
 #include "PrimeEngine/Geometry/IndexBufferCPU/IndexBufferCPU.h"
+#include "PrimeEngine/Scene/CameraManager.h"
 
 #include "PrimeEngine/APIAbstraction/GPUBuffers/AnimSetBufferGPU.h"
 #include "PrimeEngine/Render/ShaderActions/SetInstanceControlConstantsShaderAction.h"
@@ -184,7 +185,8 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 	Mesh *pMeshCaller = (Mesh *)pCaller;
 	
 #ifdef _DEBUG
-	// Debug output to see what meshes are being processed
+	// DISABLED: Debug output to see what meshes are being processed
+	/*
 	printf("DEBUG: Processing mesh '%s' [%p] with %d instances, hasAABB: %s\n", 
 		pMeshCaller->getMeshName(), pMeshCaller, pMeshCaller->m_instances.m_size, 
 		pMeshCaller->hasAABB() ? "true" : "false");
@@ -198,6 +200,7 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 	} else {
 		printf("  -> No AABB data available for mesh '%s' [%p]\n", pMeshCaller->getMeshName(), pMeshCaller);
 	}
+	*/
 #endif
 	
 	if (pMeshCaller->m_instances.m_size == 0)
@@ -292,17 +295,23 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 	// Add AABB debug rendering ONLY for imrod mesh + test line
 	if (pMeshCaller->hasAABB() && strstr(pMeshCaller->getMeshName(), "imrod.x_imrodmesh_mesh.mesha")) 
 	{
-		// Debug output to verify this is being called
+		// DISABLED: Debug output to verify this is being called
+		/*
 		printf("DEBUG: Rendering AABB for SPECIFIC mesh '%s' [%p] with %d instances\n", pMeshCaller->getMeshName(), pMeshCaller, pMeshCaller->m_instances.m_size);
 		printf("  -> DrawEvent type: %s\n", pDrawEvent ? "GATHER_DRAWCALLS" : "GATHER_DRAWCALLS_Z_ONLY");
+		*/
 		
 		// Get the DebugRenderer instance
 		PE::Components::DebugRenderer* pDebugRenderer = PE::Components::DebugRenderer::Instance();
 		if (pDebugRenderer)
 		{
+			// DISABLED: Debug output
+			/*
 			printf("  -> DebugRenderer found, creating AABB lines for imrod mesh...\n");
+			*/
 			
-			// FIRST: Create a simple test line to verify debug lines work at all
+			// DISABLED: FIRST: Create a simple test line to verify debug lines work at all
+			/*
 			Vector3 testLineData[4]; // 2 points * 2 (position + color)
 			testLineData[0] = Vector3(0.0f, 0.0f, 0.0f);  // start position
 			testLineData[1] = Vector3(1.0f, 0.0f, 0.0f);  // red color
@@ -322,9 +331,11 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 				1.0f
 			);
 			printf("  -> TEST LINE created at (0,5,0) to (10,5,0) - RED color\n");
+			*/
 
-			// TEST: Create a line at the EXACT world position of the first imrod instance
+			// DISABLED: TEST: Create a line at the EXACT world position of the first imrod instance
 			// This will test if local-to-world transformation is working
+			/*
 			if (pMeshCaller->m_instances.m_size > 0)
 			{
 				MeshInstance *pFirstInst = pMeshCaller->m_instances[0].getObject<MeshInstance>();
@@ -423,8 +434,17 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 						worldPos.m_x, worldPos.m_y, worldPos.m_z);
 				}
 			}
+			*/
 			
 			// SECOND: Create AABB debug lines for imrod mesh instances
+			// Get the active camera for frustum culling
+			PE::Components::Camera* pActiveCamera = PE::Components::CameraManager::Instance()->getActiveCamera();
+			PE::Components::CameraSceneNode* pCamSceneNode = nullptr;
+			if (pActiveCamera)
+			{
+				pCamSceneNode = pActiveCamera->getCamSceneNode();
+			}
+			
 			for (int iInst = 0; iInst < pMeshCaller->m_instances.m_size; iInst++)
 			{
 				MeshInstance *pInst = pMeshCaller->m_instances[iInst].getObject<MeshInstance>();
@@ -484,6 +504,21 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 					printf("  -> AABB WORLD corners: [0](%.2f,%.2f,%.2f) [6](%.2f,%.2f,%.2f)\n",
 						worldCorners[0].m_x, worldCorners[0].m_y, worldCorners[0].m_z,
 						worldCorners[6].m_x, worldCorners[6].m_y, worldCorners[6].m_z);
+					
+					// Test frustum culling
+					bool isInsideFrustum = true;
+					if (pCamSceneNode)
+					{
+						Vector3 aabbMin = worldCorners[0]; // min corner
+						Vector3 aabbMax = worldCorners[6]; // max corner
+						isInsideFrustum = pCamSceneNode->isAABBInsideFrustum(aabbMin, aabbMax);
+						printf("  -> Frustum culling: AABB is %s the camera frustum\n", 
+							isInsideFrustum ? "INSIDE" : "OUTSIDE");
+					}
+					else
+					{
+						printf("  -> Frustum culling: No camera available\n");
+					}
 
 					// Define the 12 lines (each line connects 2 corners)
 					int lineIndices[12][2] = {
@@ -544,10 +579,12 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 #endif
 
 #ifdef _DEBUG
-	// Summary of mesh processing
+	// DISABLED: Summary of mesh processing
+	/*
 	printf("DEBUG: Finished processing mesh '%s' [%p] - %d instances, AABB rendered: %s\n", 
 		pMeshCaller->getMeshName(), pMeshCaller, pMeshCaller->m_instances.m_size, 
 		pMeshCaller->hasAABB() ? "YES" : "NO");
+	*/
 #endif
 
 	// draw all pixel ranges with different materials
