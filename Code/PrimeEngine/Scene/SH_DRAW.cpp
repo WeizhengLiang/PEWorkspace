@@ -181,8 +181,22 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 {
 	// the mesh is who we are drawing for is previous distributor
 	// and this object is current distributor
+	printf("DEBUG: SingleHandler_DRAW::do_GATHER_DRAWCALLS called\n");
 	Component *pCaller = pEvt->m_prevDistributor.getObject<Component>();
+	printf("DEBUG: Got caller component: %p\n", pCaller);
 	Mesh *pMeshCaller = (Mesh *)pCaller;
+	printf("DEBUG: Cast to Mesh successful: %p\n", pMeshCaller);
+	
+	// CRITICAL: Add debug output IMMEDIATELY to catch the crash
+	printf("DEBUG: About to access mesh name...\n");
+	const char* meshName = pMeshCaller->getMeshName();
+	printf("DEBUG: Mesh name retrieved: '%s'\n", meshName);
+	printf("DEBUG: About to access instances array...\n");
+	int instanceCount = pMeshCaller->m_instances.m_size;
+	printf("DEBUG: Instances array size: %d\n", instanceCount);
+	
+	// CRITICAL: Add debug output at the END of function to catch if we complete successfully
+	printf("DEBUG: Starting processing for mesh '%s' with %d instances...\n", meshName, instanceCount);
 	
 #ifdef _DEBUG
 	// DISABLED: Debug output to see what meshes are being processed
@@ -204,7 +218,10 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 #endif
 	
 	if (pMeshCaller->m_instances.m_size == 0)
+	{
+		printf("DEBUG: No instances, returning early\n");
 		return; // no instances of this mesh
+	}
 	Events::Event_GATHER_DRAWCALLS *pDrawEvent = NULL;
 	Events::Event_GATHER_DRAWCALLS_Z_ONLY *pZOnlyDrawEvent = NULL;
 
@@ -217,25 +234,198 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
     
     // check for bounding volumes here and mark each instance as visible or not visible and set m_numVisibleInstances to number of visible instances
     
-    // debug testing of instance culling. do collision check instead.
-    // remove false && to enable
-    if (false && pMeshCaller->m_performBoundingVolumeCulling)
+    // FRUSTUM CULLING - test each mesh instance against camera frustum
+    printf("DEBUG: About to check frustum culling conditions...\n");
+    printf("DEBUG: m_performBoundingVolumeCulling: %s\n", pMeshCaller->m_performBoundingVolumeCulling ? "true" : "false");
+    printf("DEBUG: pDrawEvent: %p\n", pDrawEvent);
+    
+    if (pMeshCaller->m_performBoundingVolumeCulling && pDrawEvent)
     {
+        printf("DEBUG: FRUSTUM CULLING ENABLED for mesh '%s' with %d instances\n", 
+            pMeshCaller->getMeshName(), pMeshCaller->m_instances.m_size);
         pMeshCaller->m_numVisibleInstances = 0;
         
+        printf("DEBUG: About to start frustum culling loop...\n");
         for (int iInst = 0; iInst < pMeshCaller->m_instances.m_size; ++iInst)
         {
+            printf("DEBUG: Frustum culling - processing instance %d...\n", iInst);
             MeshInstance *pInst = pMeshCaller->m_instances[iInst].getObject<MeshInstance>();
-            if (iInst % 2)
+            printf("DEBUG: Got MeshInstance pointer: %p\n", pInst);
+            
+            if (pMeshCaller->hasAABB())
             {
-                pInst->m_culledOut = false;
-                ++pMeshCaller->m_numVisibleInstances;
+                printf("DEBUG: Mesh has AABB, getting corners...\n");
+                // Get the AABB in world space
+                Vector3 localCorners[8];
+                printf("DEBUG: About to call getAABBCorners...\n");
+                pMeshCaller->getAABBCorners(localCorners);
+                printf("DEBUG: getAABBCorners completed successfully\n");
+                
+                // Transform to world space - get from parent SceneNode
+                Matrix4x4 instanceWorldMatrix;
+                instanceWorldMatrix.loadIdentity();
+                Handle hInstanceParentSN = pInst->getFirstParentByType<SceneNode>();
+                if (hInstanceParentSN.isValid()) {
+                    instanceWorldMatrix = hInstanceParentSN.getObject<SceneNode>()->m_worldTransform;
+                }
+                Vector3 worldCorners[8];
+                for (int i = 0; i < 8; i++) {
+                    worldCorners[i] = instanceWorldMatrix * localCorners[i];
+                }
+                
+                // Find min/max corners
+                Vector3 aabbMin = worldCorners[0];
+                Vector3 aabbMax = worldCorners[0];
+                for (int i = 1; i < 8; i++) {
+                    aabbMin = Vector3(
+                        aabbMin.m_x < worldCorners[i].m_x ? aabbMin.m_x : worldCorners[i].m_x,
+                        aabbMin.m_y < worldCorners[i].m_y ? aabbMin.m_y : worldCorners[i].m_y,
+                        aabbMin.m_z < worldCorners[i].m_z ? aabbMin.m_z : worldCorners[i].m_z
+                    );
+                    aabbMax = Vector3(
+                        aabbMax.m_x > worldCorners[i].m_x ? aabbMax.m_x : worldCorners[i].m_x,
+                        aabbMax.m_y > worldCorners[i].m_y ? aabbMax.m_y : worldCorners[i].m_y,
+                        aabbMax.m_z > worldCorners[i].m_z ? aabbMax.m_z : worldCorners[i].m_z
+                    );
+                }
+                
+                // Test against frustum planes from the draw event (YELLOW FRUSTUM planes)
+                // Strategy: If ANY AABB corner is inside the frustum, show the Imrod
+                bool isInsideFrustum = false;
+                
+                // Test all 8 corners of the AABB
+                for (int corner = 0; corner < 8; corner++)
+                {
+                    Vector3 cornerPos = worldCorners[corner];
+                    bool cornerInside = true;
+                    
+                    // Test this corner against all 6 frustum planes
+                    for (int plane = 0; plane < 6; plane++)
+                    {
+                        if (!pDrawEvent->m_frustumPlanes[plane].isPointInside(cornerPos))
+                        {
+                            cornerInside = false;
+                            break; // This corner is outside, try next corner
+                        }
+                    }
+                    
+                    // If this corner is inside all planes, the AABB is inside
+                    if (cornerInside)
+                    {
+                        isInsideFrustum = true;
+                        break; // Found at least one corner inside, so show the Imrod
+                    }
+                }
+                
+                // Debug output for culling decisions
+                if (strstr(pMeshCaller->getMeshName(), "imrod.x_imrodmesh_mesh.mesha")) {
+                    printf("DEBUG: FRUSTUM CULLING - Imrod instance %d: AABB min(%.2f,%.2f,%.2f) max(%.2f,%.2f,%.2f) -> %s\n",
+                        iInst, aabbMin.m_x, aabbMin.m_y, aabbMin.m_z, aabbMax.m_x, aabbMax.m_y, aabbMax.m_z,
+                        isInsideFrustum ? "INSIDE YELLOW FRUSTUM (any corner inside)" : "OUTSIDE YELLOW FRUSTUM (all corners outside)");
+                    
+                    printf("  -> Using YELLOW FRUSTUM planes: near=1.0, far=50.0\n");
+                    
+                    // Show the actual frustum plane data being used for culling
+                    printf("  -> FRUSTUM PLANE DATA:\n");
+                    const char* planeNames[6] = {"Left", "Right", "Bottom", "Top", "Near", "Far"};
+                    for (int plane = 0; plane < 6; plane++) {
+                        printf("    %s plane: normal(%.3f,%.3f,%.3f) distance=%.3f\n",
+                            planeNames[plane],
+                            pDrawEvent->m_frustumPlanes[plane].normal.m_x,
+                            pDrawEvent->m_frustumPlanes[plane].normal.m_y,
+                            pDrawEvent->m_frustumPlanes[plane].normal.m_z,
+                            pDrawEvent->m_frustumPlanes[plane].distance);
+                    }
+                    
+                    // Show camera position and distance to Imrod center
+                    Vector3 imrodCenter = Vector3(
+                        (aabbMin.m_x + aabbMax.m_x) * 0.5f,
+                        (aabbMin.m_y + aabbMax.m_y) * 0.5f,
+                        (aabbMin.m_z + aabbMax.m_z) * 0.5f
+                    );
+                    
+                    // Get camera position from the draw event (we need to extract it from the projection matrix)
+                    // For now, let's just show the Imrod center position
+                    printf("  -> Imrod center position: (%.2f,%.2f,%.2f)\n", 
+                        imrodCenter.m_x, imrodCenter.m_y, imrodCenter.m_z);
+                    
+                    // Calculate distance from camera to Imrod center
+                    float distanceToImrod = sqrt(imrodCenter.m_x * imrodCenter.m_x + 
+                                               imrodCenter.m_y * imrodCenter.m_y + 
+                                               imrodCenter.m_z * imrodCenter.m_z);
+                    printf("  -> Distance from camera to Imrod: %.2f units\n", distanceToImrod);
+                    printf("  -> Frustum range: %.2f to %.2f units\n", 1.0f, 50.0f);
+                    
+                    // Test with a known point that should be OUTSIDE the frustum (very far away)
+                    Vector3 testPointFar(1000.0f, 1000.0f, 1000.0f);
+                    bool testPointInside = true;
+                    for (int plane = 0; plane < 6; plane++) {
+                        if (!pDrawEvent->m_frustumPlanes[plane].isPointInside(testPointFar)) {
+                            testPointInside = false;
+                            break;
+                        }
+                    }
+                    printf("  -> TEST: Point (1000,1000,1000) should be OUTSIDE -> %s\n", 
+                        testPointInside ? "INSIDE (ERROR!)" : "OUTSIDE (CORRECT)");
+                    
+                    // Test with origin point
+                    Vector3 testPointOrigin(0.0f, 0.0f, 0.0f);
+                    bool testOriginInside = true;
+                    for (int plane = 0; plane < 6; plane++) {
+                        if (!pDrawEvent->m_frustumPlanes[plane].isPointInside(testPointOrigin)) {
+                            testOriginInside = false;
+                            break;
+                        }
+                    }
+                    printf("  -> TEST: Point (0,0,0) -> %s\n", 
+                        testOriginInside ? "INSIDE" : "OUTSIDE");
+                    
+                    // Show which corners are inside/outside
+                    printf("  -> Corner analysis:\n");
+                    for (int corner = 0; corner < 8; corner++) {
+                        Vector3 cornerPos = worldCorners[corner];
+                        bool cornerInside = true;
+                        for (int plane = 0; plane < 6; plane++) {
+                            if (!pDrawEvent->m_frustumPlanes[plane].isPointInside(cornerPos)) {
+                                cornerInside = false;
+                                printf("    Corner %d: (%.2f,%.2f,%.2f) -> OUTSIDE (failed plane %d: normal(%.3f,%.3f,%.3f) distance=%.3f)\n", 
+                                    corner, cornerPos.m_x, cornerPos.m_y, cornerPos.m_z, plane,
+                                    pDrawEvent->m_frustumPlanes[plane].normal.m_x,
+                                    pDrawEvent->m_frustumPlanes[plane].normal.m_y,
+                                    pDrawEvent->m_frustumPlanes[plane].normal.m_z,
+                                    pDrawEvent->m_frustumPlanes[plane].distance);
+                                break;
+                            }
+                        }
+                        if (cornerInside) {
+                            printf("    Corner %d: (%.2f,%.2f,%.2f) -> INSIDE\n", 
+                                corner, cornerPos.m_x, cornerPos.m_y, cornerPos.m_z);
+                        }
+                    }
+                }
+                
+                if (isInsideFrustum)
+                {
+                    pInst->m_culledOut = false;
+                    ++pMeshCaller->m_numVisibleInstances;
+                }
+                else
+                {
+                    pInst->m_culledOut = true;
+                }
             }
             else
             {
-                pInst->m_culledOut = true;
+                // No AABB - render everything
+                pInst->m_culledOut = false;
+                ++pMeshCaller->m_numVisibleInstances;
             }
         }
+    }
+    else
+    {
+        printf("DEBUG: FRUSTUM CULLING SKIPPED for mesh '%s' - pDrawEvent is NULL (Z-only draw call)\n", 
+            pMeshCaller->getMeshName());
     }
     
 
@@ -445,20 +635,28 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 				pCamSceneNode = pActiveCamera->getCamSceneNode();
 			}
 			
+			printf("DEBUG: About to process %d Imrod instances for AABB rendering...\n", pMeshCaller->m_instances.m_size);
 			for (int iInst = 0; iInst < pMeshCaller->m_instances.m_size; iInst++)
 			{
+				printf("DEBUG: Processing Imrod instance %d...\n", iInst);
 				MeshInstance *pInst = pMeshCaller->m_instances[iInst].getObject<MeshInstance>();
 				if (pInst->m_culledOut)
+				{
+					printf("DEBUG: Instance %d is culled, skipping...\n", iInst);
 					continue;
+				}
 				
 				// Get the world transform for THIS specific instance
+				printf("DEBUG: Getting parent SceneNode for instance %d...\n", iInst);
 				Handle hInstanceParentSN = pInst->getFirstParentByType<SceneNode>();
 				if (!hInstanceParentSN.isValid())
 				{
+					printf("DEBUG: No SceneNode parent, checking for SkeletonInstance...\n");
 					// allow skeleton to be in chain
 					SkeletonInstance *pParentSkelInstance = pInst->getFirstParentByTypePtr<SkeletonInstance>();
 					if (pParentSkelInstance)
 					{
+						printf("DEBUG: Found SkeletonInstance parent, getting its SceneNode...\n");
 						hInstanceParentSN = pParentSkelInstance->getFirstParentByType<SceneNode>();
 					}
 				}
@@ -594,12 +792,17 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 	{
 		gatherDrawCallsForRange(pMeshCaller, pDrawList, &hVertexBuffersGPU[0], numVBufs, vbufWeights, iRange, pDrawEvent, pZOnlyDrawEvent);
 	}
+	
+	printf("DEBUG: Successfully completed processing for mesh '%s' with %d instances\n", meshName, instanceCount);
 }
 
 void SingleHandler_DRAW::gatherDrawCallsForRange(Mesh *pMeshCaller, DrawList *pDrawList,  PE::Handle *pHVBs, int vbCount, Vector4 &vbWeights, 
 		int iRange,
 		Events::Event_GATHER_DRAWCALLS *pDrawEvent, Events::Event_GATHER_DRAWCALLS_Z_ONLY *pZOnlyDrawEvent)
 {
+	printf("DEBUG: gatherDrawCallsForRange called for mesh '%s', range %d\n", pMeshCaller->getMeshName(), iRange);
+	printf("DEBUG: Mesh has %d instances, %d visible instances\n", pMeshCaller->m_instances.m_size, pMeshCaller->m_numVisibleInstances);
+	
 	// we might have several passes (several effects) so we need to check which effect list to use
 	PEStaticVector<PE::Handle, 4> *pEffectsForRange = NULL;
 	bool haveInstancesAndInstanceEffect = false;
@@ -773,8 +976,22 @@ void SingleHandler_DRAW::gatherDrawCallsForRange(Mesh *pMeshCaller, DrawList *pD
 				}
 
                 iSrcInstanceInBoneSegment = iSrcInstance; // reset instance id for each bone segment since we want to process same instances
-                while(pMeshCaller->m_instances[iSrcInstanceInBoneSegment].getObject<MeshInstance>()->m_culledOut)
+                printf("DEBUG: Starting culled instance loop: iSrcInstanceInBoneSegment=%d, instances.m_size=%d\n", 
+                    iSrcInstanceInBoneSegment, pMeshCaller->m_instances.m_size);
+                while(iSrcInstanceInBoneSegment < pMeshCaller->m_instances.m_size && 
+                      pMeshCaller->m_instances[iSrcInstanceInBoneSegment].getObject<MeshInstance>()->m_culledOut)
+                {
+                    printf("DEBUG: Instance %d is culled, incrementing...\n", iSrcInstanceInBoneSegment);
                     ++iSrcInstanceInBoneSegment;
+                }
+                printf("DEBUG: Culled instance loop ended: iSrcInstanceInBoneSegment=%d\n", iSrcInstanceInBoneSegment);
+                
+                // Check if all instances are culled - if so, skip this render group
+                if (iSrcInstanceInBoneSegment >= pMeshCaller->m_instances.m_size)
+                {
+                    printf("DEBUG: All instances are culled, skipping render group %d\n", iRenderGroup);
+                    continue; // Skip this render group
+                }
                 
 				pDrawList->beginDrawCallRecord(curMat.m_dbgName);
 

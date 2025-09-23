@@ -198,6 +198,66 @@ int ClientGame::runGameFrame()
                 drawEvt->m_parentWorldTransform.loadIdentity();
                 drawEvt->m_viewInvTransform = pcam->m_worldToViewTransform.inverse();
                 
+                // Copy frustum planes from camera for culling
+                // NOTE: The camera's m_frustumPlanes are computed using yellow frustum parameters (5.0, 6.0)
+                // in computeFrustumPlanes(), so these are already the correct culling planes
+                printf("DEBUG: Camera type: %s\n", pcam->getClassName());
+                printf("DEBUG: Camera pointer: %p\n", pcam);
+                
+                // The camera IS a CameraSceneNode, not a component of it
+                CameraSceneNode* pCamSceneNode = static_cast<CameraSceneNode*>(pcam);
+                printf("DEBUG: CameraSceneNode pointer: %p\n", pCamSceneNode);
+                
+                if (pCamSceneNode) {
+                    printf("DEBUG: CameraSceneNode found, checking source frustum planes:\n");
+                    const char* planeNames[6] = {"Left", "Right", "Bottom", "Top", "Near", "Far"};
+                    
+                    // Check if m_frustumPlanes is properly initialized
+                    printf("DEBUG: Checking m_frustumPlanes array...\n");
+                    
+                    // Try to access just the first plane to see if it crashes
+                    printf("DEBUG: Testing first plane access...\n");
+                    printf("  SOURCE Left: normal(%.3f,%.3f,%.3f) distance=%.3f\n",
+                        pCamSceneNode->m_frustumPlanes[0].normal.m_x,
+                        pCamSceneNode->m_frustumPlanes[0].normal.m_y,
+                        pCamSceneNode->m_frustumPlanes[0].normal.m_z,
+                        pCamSceneNode->m_frustumPlanes[0].distance);
+                    
+                    printf("DEBUG: First plane access successful, continuing...\n");
+                    for (int i = 1; i < 6; i++) {
+                        printf("DEBUG: Accessing plane %d...\n", i);
+                        printf("  SOURCE %s: normal(%.3f,%.3f,%.3f) distance=%.3f\n",
+                            planeNames[i],
+                            pCamSceneNode->m_frustumPlanes[i].normal.m_x,
+                            pCamSceneNode->m_frustumPlanes[i].normal.m_y,
+                            pCamSceneNode->m_frustumPlanes[i].normal.m_z,
+                            pCamSceneNode->m_frustumPlanes[i].distance);
+                    }
+                    
+                    printf("DEBUG: About to copy frustum planes...\n");
+                    for (int i = 0; i < 6; i++) {
+                        printf("DEBUG: Copying plane %d...\n", i);
+                        drawEvt->m_frustumPlanes[i] = Event_GATHER_DRAWCALLS::FrustumPlane(
+                            pCamSceneNode->m_frustumPlanes[i].normal,
+                            pCamSceneNode->m_frustumPlanes[i].distance
+                        );
+                    }
+                    printf("DEBUG: Copied YELLOW FRUSTUM planes to draw event for culling\n");
+                    
+                    // Show all 6 planes to verify they're not all zeros
+                    printf("DEBUG: COPIED frustum planes:\n");
+                    for (int i = 0; i < 6; i++) {
+                        printf("  COPIED %s: normal(%.3f,%.3f,%.3f) distance=%.3f\n",
+                            planeNames[i],
+                            drawEvt->m_frustumPlanes[i].normal.m_x,
+                            drawEvt->m_frustumPlanes[i].normal.m_y,
+                            drawEvt->m_frustumPlanes[i].normal.m_z,
+                            drawEvt->m_frustumPlanes[i].distance);
+                    }
+                } else {
+                    printf("ERROR: CameraSceneNode not found! Cannot copy frustum planes.\n");
+                }
+                
 				//Commented out by Mac because I'm pretty sure this does nothing but am afraid to delete it...
 				static bool setCameraAsLightSource = false;
 				RootSceneNode *pRoot = RootSceneNode::Instance();

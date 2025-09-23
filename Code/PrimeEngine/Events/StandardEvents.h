@@ -64,6 +64,25 @@ struct Event_GATHER_DRAWCALLS : public Event {
 	Matrix4x4 m_projectionTransform;
 	Matrix4x4 m_parentWorldTransform;
 	Matrix4x4 m_viewInvTransform;
+	
+	// Frustum planes for culling
+	struct FrustumPlane {
+		Vector3 normal;
+		float distance;
+		FrustumPlane() : normal(Vector3(0.0f, 0.0f, 0.0f)), distance(0.0f) {}
+		FrustumPlane(const Vector3& n, float d) : normal(n), distance(d) {}
+		
+		bool isPointInside(const Vector3& point) {
+			float dotProduct = normal.dotProduct(point);
+			return (dotProduct + distance) >= 0.0f;
+		}
+		
+		bool isSphereInside(const Vector3& center, float radius) {
+			float dotProduct = normal.dotProduct(center);
+			return (dotProduct + distance) >= -radius;
+		}
+	};
+	FrustumPlane m_frustumPlanes[6]; // Left, Right, Bottom, Top, Near, Far
 
 	Vector3 m_eyePos;
 	Vector3 m_eyeDir;

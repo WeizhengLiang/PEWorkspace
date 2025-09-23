@@ -193,7 +193,7 @@ int ClientCharacterControlGame::initGame()
 	
     bool spawnALotOfMeshes = true;
     
-    int maxX = 10; // maybe need more to get framerate lower
+    int maxX = 5; // maybe need more to get framerate lower
     
     if (spawnALotOfMeshes)
     {

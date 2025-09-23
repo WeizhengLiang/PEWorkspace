@@ -59,6 +59,7 @@ void CameraSceneNode::do_CALCULATE_TRANSFORMATIONS(Events::Event *pEvt)
         verticalFov *= factor;
     }
 
+	// Use real camera parameters for rendering
 	m_viewToProjectedTransform = CameraOps::CreateProjectionMatrix(verticalFov, 
 		aspect,
 		m_near, m_far);
@@ -75,23 +76,23 @@ void CameraSceneNode::do_CALCULATE_TRANSFORMATIONS(Events::Event *pEvt)
 
 void CameraSceneNode::computeFrustumPlanes()
 {
-	// TEMPORARY: Use yellow frustum visualization as the actual culling boundary
-	// This lets us see exactly how objects pop in/out at the yellow frustum edges
+	// Use REAL camera frustum for culling but with YELLOW FRUSTUM planes
+	// This means we use the real camera's projection matrix but extract planes from yellow frustum
 	
-	// Create a custom view-projection matrix using the yellow frustum parameters
-	float testNear = 1.5f;   // 1.5 units from camera
-	float testFar = 4.0f;    // 4 units from camera (very small!)
-	float actualFOV = 0.33f * PrimitiveTypes::Constants::c_Pi_F32;  // Same as yellow frustum
+	// Create yellow frustum projection matrix for plane extraction
+	float yellowNear = 1.0f;   // Yellow frustum near plane (close to camera)
+	float yellowFar = 50.0f;   // Yellow frustum far plane (reasonable range)
+	float actualFOV = 0.33f * PrimitiveTypes::Constants::c_Pi_F32;  // Same as real camera
 	
-	// Create custom projection matrix for yellow frustum
-	Matrix4x4 customProj = CameraOps::CreateProjectionMatrix(actualFOV, 
+	// Create yellow frustum projection matrix
+	Matrix4x4 yellowProj = CameraOps::CreateProjectionMatrix(actualFOV, 
 		(float)(m_pContext->getGPUScreen()->getWidth()) / (float)(m_pContext->getGPUScreen()->getHeight()),
-		testNear, testFar);
+		yellowNear, yellowFar);
 	
-	// Use custom projection instead of real camera projection
-	Matrix4x4 viewProj = customProj * m_worldToViewTransform;
+	// Use yellow frustum projection for plane extraction
+	Matrix4x4 viewProj = yellowProj * m_worldToViewTransform;
 	
-	printf("DEBUG: Using SMALL YELLOW FRUSTUM as actual culling boundary (near=%.2f, far=%.2f)\n", testNear, testFar);
+	printf("DEBUG: Using YELLOW FRUSTUM planes for culling (near=%.2f, far=%.2f)\n", yellowNear, yellowFar);
 	
 	// Extract the 6 frustum planes from the view-projection matrix
 	// Each plane is defined by: ax + by + cz + d = 0
@@ -133,23 +134,23 @@ void CameraSceneNode::computeFrustumPlanes()
 	m_frustumPlanes[5].normal.m_z = (float)(viewProj.m[2][3] - viewProj.m[2][2]);
 	m_frustumPlanes[5].distance = (float)(viewProj.m[3][3] - viewProj.m[3][2]);
 	
-	// Normalize all planes and flip normals to point inward
-	for (int i = 0; i < 6; i++)
-	{
-		float length = m_frustumPlanes[i].normal.length();
-		if (length > 0.0f)
+		// Normalize all planes and flip normals to point inward
+		for (int i = 0; i < 6; i++)
 		{
-			m_frustumPlanes[i].normal = m_frustumPlanes[i].normal / length;
-			m_frustumPlanes[i].distance /= length;
-			
-			// Flip the normal to point inward toward the camera
-			m_frustumPlanes[i].normal = m_frustumPlanes[i].normal * -1.0f;
-			m_frustumPlanes[i].distance = -m_frustumPlanes[i].distance;
+			float length = m_frustumPlanes[i].normal.length();
+			if (length > 0.0f)
+			{
+				m_frustumPlanes[i].normal = m_frustumPlanes[i].normal / length;
+				m_frustumPlanes[i].distance /= length;
+				
+				// DON'T flip the normal - try without flipping first
+				// m_frustumPlanes[i].normal = m_frustumPlanes[i].normal * -1.0f;
+				// m_frustumPlanes[i].distance = -m_frustumPlanes[i].distance;
+			}
 		}
-	}
 	
 	// Debug output to verify plane normals are pointing inward
-	printf("DEBUG: YELLOW FRUSTUM plane normals (using yellow frustum as culling boundary):\n");
+	printf("DEBUG: YELLOW FRUSTUM plane normals (extracted from yellow frustum projection):\n");
 	const char* planeNames[6] = {"Left", "Right", "Bottom", "Top", "Near", "Far"};
 	for (int i = 0; i < 6; i++)
 	{
@@ -403,8 +404,8 @@ void CameraSceneNode::drawFrustumBoxDebug()
 	
 	// Calculate frustum dimensions - VERY SMALL FOR CLEAR CULLING BOUNDARIES
 	// Match the culling boundary parameters exactly
-	float testNear = 1.5f;   // 1.5 units from camera (matches culling)
-	float testFar = 4.0f;    // 4 units from camera (matches culling)
+	float testNear = 1.0f;   // 5.0 units from camera (matches culling)
+	float testFar = 50.0f;    // 6.0 units from camera (matches culling)
 	
 	// Use actual FOV from camera
 	float actualFOV = 0.33f * PrimitiveTypes::Constants::c_Pi_F32;  // Same as in do_CALCULATE_TRANSFORMATIONS
