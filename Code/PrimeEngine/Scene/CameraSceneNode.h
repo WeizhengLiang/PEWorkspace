@@ -27,24 +27,24 @@ namespace Components {
 // Frustum plane structure for culling
 struct FrustumPlane
 {
-	Vector3 normal;    // Plane normal (pointing inward)
+	Vector3 normal;    // Plane normal (pointing inward toward frustum center)
 	float distance;    // Distance from origin
 	
 	FrustumPlane() : normal(Vector3(0.0f, 0.0f, 0.0f)), distance(0.0f) {}
 	FrustumPlane(const Vector3& n, float d) : normal(n), distance(d) {}
 	
-	// Test if a point is inside the plane (positive side)
+	// Test if a point is inside the plane (for this engine's convention)
 	bool isPointInside(const Vector3& point)
 	{
 		float dotProduct = normal.dotProduct(point);
-		return (dotProduct + distance) >= 0.0f;
+		return (dotProduct + distance) <= 0.0f;  // Inside if negative for this engine
 	}
 	
 	// Test if a sphere is inside the plane
 	bool isSphereInside(const Vector3& center, float radius)
 	{
 		float dotProduct = normal.dotProduct(center);
-		return (dotProduct + distance) >= -radius;
+		return (dotProduct + distance) <= radius;  // Inside if within radius margin
 	}
 };
 
