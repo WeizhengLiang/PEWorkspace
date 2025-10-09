@@ -13,6 +13,8 @@
 #include "PrimeEngine/Scene/Skeleton.h"
 #include "PrimeEngine/Scene/MeshInstance.h"
 #include "PrimeEngine/Scene/SkeletonInstance.h"
+#include "PrimeEngine/Scene/PhysicsManager.h"
+#include "PrimeEngine/Scene/Mesh.h"
 
 namespace PE {
 namespace Components {
@@ -326,6 +328,34 @@ void GameObjectManager::do_CREATE_MESH(Events::Event *pEvt)
 				pSN->m_base.setU(pRealEvent->m_u);
 				pSN->m_base.setV(pRealEvent->m_v);
 				pSN->m_base.setN(pRealEvent->m_n);
+				
+				// CREATE PHYSICS COMPONENT for static mesh
+				Mesh *pMesh = pMeshInstance->m_hAsset.getObject<Mesh>();
+				if (pMesh && pMesh->hasAABB())
+				{
+					PE::Handle hPhysics("PHYSICS_COMPONENT", sizeof(PhysicsComponent));
+					PhysicsComponent *pPhysics = new(hPhysics) PhysicsComponent(*m_pContext, m_arena, hPhysics);
+					pPhysics->addDefaultComponents();
+					
+					// Initialize physics properties
+					pPhysics->position = pSN->m_base.getPos();
+					pPhysics->velocity = Vector3(0.0f, 0.0f, 0.0f);
+					pPhysics->acceleration = Vector3(0.0f, 0.0f, 0.0f);
+					
+					// Static mesh uses AABB for collision
+					pPhysics->shapeType = PhysicsComponent::AABB;
+					pPhysics->aabbExtents = pMesh->getLocalAABB().extents;
+					
+					// Static mesh doesn't move
+					pPhysics->isStatic = true;
+					pPhysics->mass = 0.0f;  // Infinite mass (static)
+					
+					// Link to SceneNode
+					pPhysics->m_linkedSceneNode = pSN;
+					
+					// Add to PhysicsManager
+					PhysicsManager::Instance()->addComponent(hPhysics);
+				}
 			}
 			else
 			{
