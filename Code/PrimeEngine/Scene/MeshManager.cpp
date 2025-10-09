@@ -97,7 +97,15 @@ PE::Handle MeshManager::getAsset(const char *asset, const char *package, int &th
 		//scpu.buildLod();
 #endif
         // generate collision volume here. or you could generate it in MeshCPU::ReadMesh()
-        pMesh->m_performBoundingVolumeCulling = true; // will now perform tests for this mesh
+        // Only enable culling for imrod meshes (for testing)
+        if (strstr(asset, "imrod"))
+        {
+            pMesh->m_performBoundingVolumeCulling = true;
+        }
+        else
+        {
+            pMesh->m_performBoundingVolumeCulling = false; // Disable culling for other meshes (ground, buildings, etc.)
+        }
 
 		h = hMesh;
 	}
