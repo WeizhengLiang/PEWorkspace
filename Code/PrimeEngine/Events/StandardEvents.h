@@ -52,6 +52,15 @@ struct Event_PRE_RENDER_needsRC : public Event {
 	int &m_threadOwnershipMask;
 };
 
+struct Event_PHYSICS_DEBUG_RENDER : public Event {
+	PE_DECLARE_CLASS(Event_PHYSICS_DEBUG_RENDER);
+	
+	Event_PHYSICS_DEBUG_RENDER() {}
+	virtual ~Event_PHYSICS_DEBUG_RENDER() {}
+	
+	// Event carries no data - it's just a signal to render physics debug shapes
+	// The renderer will query PhysicsManager for the actual data
+};
 
 struct Event_GATHER_DRAWCALLS : public Event {
 	PE_DECLARE_CLASS(Event_GATHER_DRAWCALLS);

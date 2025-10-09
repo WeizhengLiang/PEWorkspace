@@ -2,7 +2,10 @@
 #include "PhysicsManager.h"
 #include "PrimeEngine/APIAbstraction/APIAbstractionDefines.h"
 #include "PrimeEngine/Lua/LuaEnvironment.h"
+#include "PrimeEngine/Events/StandardEvents.h"
 #include "SceneNode.h"
+#include "DebugRenderer.h"
+#include <cmath>
 
 namespace PE {
 namespace Components {
@@ -22,6 +25,9 @@ PhysicsManager::PhysicsManager(PE::GameContext &context, PE::MemoryArena arena, 
 void PhysicsManager::addDefaultComponents()
 {
 	Component::addDefaultComponents();
+	
+	// Register event handlers
+	PE_REGISTER_EVENT_HANDLER(PE::Events::Event_PHYSICS_DEBUG_RENDER, PhysicsManager::do_PHYSICS_DEBUG_RENDER);
 }
 
 void PhysicsManager::Construct(PE::GameContext &context, PE::MemoryArena arena)
@@ -38,6 +44,7 @@ PhysicsManager *PhysicsManager::Instance(){return s_hInstance.getObject<PhysicsM
 void PhysicsManager::addComponent(Handle hPhysicsComponent)
 {
 	m_physicsComponents.add(hPhysicsComponent);
+	PEINFO("PhysicsManager: Added physics component. Total count: %d\n", m_physicsComponents.m_size);
 }
 
 // Helper function: Test collision between sphere and AABB
@@ -201,6 +208,163 @@ void PhysicsManager::update(float deltaTime)
             pPhysics->m_linkedSceneNode->m_base.setPos(pPhysics->position);
         }
     }
+}
+
+// Helper function to draw a single line
+static void drawLine(DebugRenderer* pDebugRenderer, const Vector3& p1, const Vector3& p2, const Vector3& color)
+{
+    float lineData[12]; // 2 points * (3 position + 3 color) = 12 floats
+    lineData[0] = p1.m_x; lineData[1] = p1.m_y; lineData[2] = p1.m_z;
+    lineData[3] = color.m_x; lineData[4] = color.m_y; lineData[5] = color.m_z;
+    lineData[6] = p2.m_x; lineData[7] = p2.m_y; lineData[8] = p2.m_z;
+    lineData[9] = color.m_x; lineData[10] = color.m_y; lineData[11] = color.m_z;
+    
+    Matrix4x4 identity;
+    identity.loadIdentity();
+    pDebugRenderer->createLineMesh(false, identity, lineData, 12, 0.0f);
+}
+
+// Event handler implementation
+void PhysicsManager::do_PHYSICS_DEBUG_RENDER(PE::Events::Event *pEvt)
+{
+#ifndef _DEBUG
+    // Debug rendering disabled in release builds
+    return;
+#else
+    DebugRenderer* pDebugRenderer = DebugRenderer::Instance();
+    if (!pDebugRenderer)
+    {
+        PEINFO("PhysicsManager: DebugRenderer is NULL!\n");
+        return;
+    }
+    
+    PEINFO("PhysicsManager: Debug rendering %d physics components\n", m_physicsComponents.m_size);
+    
+    // Iterate through all physics components and draw their shapes
+    for (PrimitiveTypes::UInt32 i = 0; i < m_physicsComponents.m_size; i++)
+    {
+        PhysicsComponent *pPhysics = m_physicsComponents[i].getObject<PhysicsComponent>();
+        if (!pPhysics)
+            continue;
+        
+        if (pPhysics->shapeType == PhysicsComponent::SPHERE)
+        {
+            // Draw sphere wireframe (3 circles: XY, XZ, YZ planes)
+            const int segments = 16;  // Number of line segments per circle
+            const float radius = pPhysics->sphereRadius;
+            const Vector3& center = pPhysics->position;
+            
+            PEINFO("  Drawing SPHERE at (%.2f, %.2f, %.2f) radius=%.2f\n", 
+                center.m_x, center.m_y, center.m_z, radius);
+            
+            // Color: Cyan for dynamic, Yellow for static
+            Vector3 color = pPhysics->isStatic ? Vector3(1.0f, 1.0f, 0.0f) : Vector3(0.0f, 1.0f, 1.0f);
+            
+            // Draw 3 orthogonal circles to represent the sphere
+            // Circle 1: XY plane (around Z axis)
+            for (int j = 0; j < segments; j++)
+            {
+                float angle1 = (float)j / (float)segments * 2.0f * 3.14159f;
+                float angle2 = (float)(j + 1) / (float)segments * 2.0f * 3.14159f;
+                
+                Vector3 p1(
+                    center.m_x + radius * cosf(angle1),
+                    center.m_y + radius * sinf(angle1),
+                    center.m_z
+                );
+                Vector3 p2(
+                    center.m_x + radius * cosf(angle2),
+                    center.m_y + radius * sinf(angle2),
+                    center.m_z
+                );
+                
+                drawLine(pDebugRenderer, p1, p2, color);
+            }
+            
+            // Circle 2: XZ plane (around Y axis)
+            for (int j = 0; j < segments; j++)
+            {
+                float angle1 = (float)j / (float)segments * 2.0f * 3.14159f;
+                float angle2 = (float)(j + 1) / (float)segments * 2.0f * 3.14159f;
+                
+                Vector3 p1(
+                    center.m_x + radius * cosf(angle1),
+                    center.m_y,
+                    center.m_z + radius * sinf(angle1)
+                );
+                Vector3 p2(
+                    center.m_x + radius * cosf(angle2),
+                    center.m_y,
+                    center.m_z + radius * sinf(angle2)
+                );
+                
+                drawLine(pDebugRenderer, p1, p2, color);
+            }
+            
+            // Circle 3: YZ plane (around X axis)
+            for (int j = 0; j < segments; j++)
+            {
+                float angle1 = (float)j / (float)segments * 2.0f * 3.14159f;
+                float angle2 = (float)(j + 1) / (float)segments * 2.0f * 3.14159f;
+                
+                Vector3 p1(
+                    center.m_x,
+                    center.m_y + radius * cosf(angle1),
+                    center.m_z + radius * sinf(angle1)
+                );
+                Vector3 p2(
+                    center.m_x,
+                    center.m_y + radius * cosf(angle2),
+                    center.m_z + radius * sinf(angle2)
+                );
+                
+                drawLine(pDebugRenderer, p1, p2, color);
+            }
+        }
+        else if (pPhysics->shapeType == PhysicsComponent::AABB)
+        {
+            // Draw AABB wireframe box
+            const Vector3& center = pPhysics->position;
+            const Vector3& extents = pPhysics->aabbExtents;
+            
+            PEINFO("  Drawing AABB at (%.2f, %.2f, %.2f) extents=(%.2f, %.2f, %.2f)\n", 
+                center.m_x, center.m_y, center.m_z, extents.m_x, extents.m_y, extents.m_z);
+            
+            // Color: Magenta for static AABBs
+            Vector3 color(1.0f, 0.0f, 1.0f);
+            
+            // Calculate 8 corners
+            Vector3 corners[8];
+            corners[0] = Vector3(center.m_x - extents.m_x, center.m_y - extents.m_y, center.m_z - extents.m_z);
+            corners[1] = Vector3(center.m_x + extents.m_x, center.m_y - extents.m_y, center.m_z - extents.m_z);
+            corners[2] = Vector3(center.m_x + extents.m_x, center.m_y + extents.m_y, center.m_z - extents.m_z);
+            corners[3] = Vector3(center.m_x - extents.m_x, center.m_y + extents.m_y, center.m_z - extents.m_z);
+            corners[4] = Vector3(center.m_x - extents.m_x, center.m_y - extents.m_y, center.m_z + extents.m_z);
+            corners[5] = Vector3(center.m_x + extents.m_x, center.m_y - extents.m_y, center.m_z + extents.m_z);
+            corners[6] = Vector3(center.m_x + extents.m_x, center.m_y + extents.m_y, center.m_z + extents.m_z);
+            corners[7] = Vector3(center.m_x - extents.m_x, center.m_y + extents.m_y, center.m_z + extents.m_z);
+            
+            // Draw 12 edges of the box
+            // Bottom face
+            drawLine(pDebugRenderer, corners[0], corners[1], color);
+            drawLine(pDebugRenderer, corners[1], corners[2], color);
+            drawLine(pDebugRenderer, corners[2], corners[3], color);
+            drawLine(pDebugRenderer, corners[3], corners[0], color);
+            
+            // Top face
+            drawLine(pDebugRenderer, corners[4], corners[5], color);
+            drawLine(pDebugRenderer, corners[5], corners[6], color);
+            drawLine(pDebugRenderer, corners[6], corners[7], color);
+            drawLine(pDebugRenderer, corners[7], corners[4], color);
+            
+            // Vertical edges
+            drawLine(pDebugRenderer, corners[0], corners[4], color);
+            drawLine(pDebugRenderer, corners[1], corners[5], color);
+            drawLine(pDebugRenderer, corners[2], corners[6], color);
+            drawLine(pDebugRenderer, corners[3], corners[7], color);
+        }
+    }
+#endif
 }
 
 }

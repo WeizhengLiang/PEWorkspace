@@ -437,8 +437,8 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 						{0,4}, {1,5}, {2,6}, {3,7}  // vertical edges
 					};
 
-					// Debug color (bright magenta for AABB to distinguish from coordinate axes)
-					Vector3 color(1.0f, 0.0f, 1.0f);  // MAGENTA color
+				// Debug color (green for mesh AABB / frustum culling volumes)
+				Vector3 color(0.0f, 1.0f, 0.0f);  // GREEN color
 
 					int pointIndex = 0;
 					for (int k = 0; k < 12; k++) {
