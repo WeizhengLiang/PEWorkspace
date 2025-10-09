@@ -364,14 +364,14 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 	projectionViewWorldMatrix = projectionViewWorldMatrix * worldMatrix;
 
 #ifdef _DEBUG
-	// Add AABB debug rendering ONLY for imrod mesh + test line
-	if (pMeshCaller->hasAABB() && strstr(pMeshCaller->getMeshName(), "imrod.x_imrodmesh_mesh.mesha")) 
+	// Add AABB debug rendering for ALL meshes that have AABBs
+	if (pMeshCaller->hasAABB()) 
 	{
 		// Get the DebugRenderer instance
 		PE::Components::DebugRenderer* pDebugRenderer = PE::Components::DebugRenderer::Instance();
 		if (pDebugRenderer)
 		{
-			// Create AABB debug lines for imrod mesh instances
+			// Create AABB debug lines for mesh instances
 			// Get the active camera for frustum culling
 			PE::Components::Camera* pActiveCamera = PE::Components::CameraManager::Instance()->getActiveCamera();
 			PE::Components::CameraSceneNode* pCamSceneNode = nullptr;
