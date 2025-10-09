@@ -1,8 +1,8 @@
 #define NOMINMAX
 #include "PhysicsManager.h"
 #include "PrimeEngine/APIAbstraction/APIAbstractionDefines.h"
-
 #include "PrimeEngine/Lua/LuaEnvironment.h"
+#include "SceneNode.h"
 
 namespace PE {
 namespace Components {
@@ -17,28 +17,19 @@ PhysicsManager::PhysicsManager(PE::GameContext &context, PE::MemoryArena arena, 
 : Component(context, arena, hMyself)
 , m_physicsComponents(context, arena, 256)  // Initial capacity of 256 physics components
 {
-	PEINFO("PhysicsManager constructor completed\n");
 }
 
 void PhysicsManager::addDefaultComponents()
 {
-	PEINFO("PhysicsManager::addDefaultComponents() started\n");
 	Component::addDefaultComponents();
-	PEINFO("PhysicsManager::addDefaultComponents() completed\n");
 }
 
 void PhysicsManager::Construct(PE::GameContext &context, PE::MemoryArena arena)
 {
-	PEINFO("PhysicsManager::Construct() called\n");
-	PEINFO("About to create Handle\n");
 	Handle h("PHYSICS_MANAGER", sizeof(PhysicsManager));
-	PEINFO("About to create PhysicsManager object\n");
 	PhysicsManager *pPhysicsManager = new(h) PhysicsManager(context, arena, h);
-	PEINFO("About to call addDefaultComponents\n");
 	pPhysicsManager->addDefaultComponents();
-	PEINFO("About to SetInstance\n");
 	SetInstance(h);
-	PEINFO("PhysicsManager::Construct() completed\n");
 }
 
 void PhysicsManager::SetInstance(Handle h){s_hInstance = h;}
@@ -51,8 +42,37 @@ void PhysicsManager::addComponent(Handle hPhysicsComponent)
 
 void PhysicsManager::update(float deltaTime)
 {
-    // For now, just return (empty update for Milestone 1)
-    // TODO: Milestone 2 - implement gravity
+    // Gravity constant (m/s^2) - negative Y is down
+    const float GRAVITY = -10.0f;
+    
+    // Update all physics components
+    for (PrimitiveTypes::UInt32 i = 0; i < m_physicsComponents.m_size; i++)
+    {
+        PhysicsComponent *pPhysics = m_physicsComponents[i].getObject<PhysicsComponent>();
+        
+        if (!pPhysics || pPhysics->isStatic)
+            continue;  // Skip static objects
+        
+        // Apply gravity (F = ma, so a = F/m, but gravity is constant acceleration)
+        pPhysics->acceleration.m_y = GRAVITY;
+        
+        // Update velocity: v = v0 + a*dt
+        pPhysics->velocity.m_x += pPhysics->acceleration.m_x * deltaTime;
+        pPhysics->velocity.m_y += pPhysics->acceleration.m_y * deltaTime;
+        pPhysics->velocity.m_z += pPhysics->acceleration.m_z * deltaTime;
+        
+        // Update position: p = p0 + v*dt
+        pPhysics->position.m_x += pPhysics->velocity.m_x * deltaTime;
+        pPhysics->position.m_y += pPhysics->velocity.m_y * deltaTime;
+        pPhysics->position.m_z += pPhysics->velocity.m_z * deltaTime;
+        
+        // Write position back to SceneNode
+        if (pPhysics->m_linkedSceneNode)
+        {
+            pPhysics->m_linkedSceneNode->m_base.setPos(pPhysics->position);
+        }
+    }
+    
     // TODO: Milestone 3 - implement collision detection
     // TODO: Milestone 4 - implement collision response
 }

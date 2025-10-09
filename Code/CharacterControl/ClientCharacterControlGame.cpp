@@ -254,6 +254,13 @@ int ClientCharacterControlGame::initGame()
 
 	m_pContext->getGPUScreen()->AcquireRenderContextOwnership(m_pContext->m_gameThreadThreadOwnershipMask);
 
+	// TEST: Spawn a soldier in the air to test gravity
+	// {
+	// 	Vector3 spawnPos(0.0f, 10.0f, -5.0f);  // 10 meters in the air
+	// 	((ClientGameObjectManagerAddon*)(pGameCtx->getGameObjectManagerAddon()))->createSoldierNPC(
+	// 		spawnPos, m_pContext->m_gameThreadThreadOwnershipMask);
+	// }
+
 	return 1; // 1 (true) = success. no errors. TODO: add error checking
 }
 
