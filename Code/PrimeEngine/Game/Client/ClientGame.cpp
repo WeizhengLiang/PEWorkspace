@@ -209,6 +209,7 @@ namespace Components {
     RootSceneNode::Construct(context, MemoryArena_Client);
 	DebugRenderer::Construct(context, MemoryArena_Client);
 	CameraManager::Construct(context, MemoryArena_Client);
+	PhysicsManager::Construct(context, MemoryArena_Client);
     
     // initialize timer functionality
     Timer::Initialize();

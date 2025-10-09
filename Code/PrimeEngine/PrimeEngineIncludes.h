@@ -97,6 +97,7 @@
 #include "Scene/InstancingSceneNode.h"
 #include "Scene/Light.h"
 #include "Scene/CameraManager.h"
+#include "Scene/PhysicsManager.h"
 #include "Scene/DebugRenderer.h"
 
 #include "GameObjectModel/Camera.h"

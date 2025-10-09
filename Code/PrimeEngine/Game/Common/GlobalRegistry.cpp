@@ -36,8 +36,10 @@ void Register(PE::Components::LuaEnvironment *pLuaEnv, PE::GlobalRegistry *pRegi
 					PE::Components::Input::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
 					PE::Components::DefaultGameControls::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
 					PE::Components::DrawList::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
-					PE::Components::CameraManager::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
-					PE::Components::Log::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
+				PE::Components::CameraManager::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
+				PE::Components::PhysicsManager::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
+				PE::Components::PhysicsComponent::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
+				PE::Components::Log::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
 					PE::Components::Light::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
 					PE::Components::SceneNode::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
 						PE::Components::RootSceneNode::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
