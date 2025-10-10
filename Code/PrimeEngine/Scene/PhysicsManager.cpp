@@ -124,6 +124,29 @@ void PhysicsManager::update(float deltaTime)
     // WARNING: Values < 1.0 can cause tunneling (objects pass through walls)!
     const float AABB_SCALE_FACTOR = 1.0f;  // Set to 0.9 or 0.8 if AABBs too large
     
+    // CAP deltaTime to prevent tunneling during slow frames (loading, etc)
+    // This is CRITICAL for preventing physics objects from passing through thin colliders
+    const float MAX_DELTA_TIME = 0.033f;  // Cap at ~30 FPS (33ms)
+    if (deltaTime > MAX_DELTA_TIME)
+    {
+        #ifdef _DEBUG
+        static int warnCount = 0;
+        if (warnCount++ < 5)  // Only warn first 5 times
+        {
+            PEINFO("WARNING: deltaTime capped from %.4f to %.4f (slow frame!)\n", deltaTime, MAX_DELTA_TIME);
+        }
+        #endif
+        deltaTime = MAX_DELTA_TIME;
+    }
+    
+    #ifdef _DEBUG
+    static int dtCheckCount = 0;
+    if (dtCheckCount++ % 60 == 0)
+    {
+        PEINFO("PhysicsManager::update() deltaTime=%.4f seconds (%.1f FPS)\n", deltaTime, 1.0f/deltaTime);
+    }
+    #endif
+    
     // PHASE 0: Sync physics positions from SceneNode world transforms (for newly created/static objects)
     static bool s_firstFrame = true;
     for (PrimitiveTypes::UInt32 i = 0; i < m_physicsComponents.m_size; i++)
@@ -275,6 +298,22 @@ void PhysicsManager::update(float deltaTime)
         pPhysics->velocity.m_y += pPhysics->acceleration.m_y * deltaTime;
         pPhysics->velocity.m_z += pPhysics->acceleration.m_z * deltaTime;
         
+        // Clamp velocity to prevent tunneling (passing through thin objects)
+        const float MAX_VELOCITY = 50.0f;  // 50 m/s max speed
+        float velocityMagnitudeSq = 
+            pPhysics->velocity.m_x * pPhysics->velocity.m_x +
+            pPhysics->velocity.m_y * pPhysics->velocity.m_y +
+            pPhysics->velocity.m_z * pPhysics->velocity.m_z;
+        
+        if (velocityMagnitudeSq > MAX_VELOCITY * MAX_VELOCITY)
+        {
+            float velocityMagnitude = sqrtf(velocityMagnitudeSq);
+            float scale = MAX_VELOCITY / velocityMagnitude;
+            pPhysics->velocity.m_x *= scale;
+            pPhysics->velocity.m_y *= scale;
+            pPhysics->velocity.m_z *= scale;
+        }
+        
         // Update position: p = p0 + v*dt
         pPhysics->position.m_x += pPhysics->velocity.m_x * deltaTime;
         pPhysics->position.m_y += pPhysics->velocity.m_y * deltaTime;
@@ -284,11 +323,30 @@ void PhysicsManager::update(float deltaTime)
     // PHASE 2: Detect collisions
     Array<CollisionInfo> collisions(*m_pContext, m_arena, 64);
     
+    #ifdef _DEBUG
+    static int testCount = 0;
+    bool shouldDebug = (testCount++ % 60 == 0);  // Every 60 frames
+    int dynamicCount = 0, staticCount = 0;
+    #endif
+    
     for (PrimitiveTypes::UInt32 i = 0; i < m_physicsComponents.m_size; i++)
     {
         PhysicsComponent *pDynamic = m_physicsComponents[i].getObject<PhysicsComponent>();
         if (!pDynamic || pDynamic->isStatic || pDynamic->shapeType != PhysicsComponent::SPHERE)
             continue;  // Only test dynamic spheres
+        
+        #ifdef _DEBUG
+        dynamicCount++;
+        if (shouldDebug)
+        {
+            float speed = sqrtf(pDynamic->velocity.m_x * pDynamic->velocity.m_x + 
+                              pDynamic->velocity.m_y * pDynamic->velocity.m_y + 
+                              pDynamic->velocity.m_z * pDynamic->velocity.m_z);
+            PEINFO("Testing dynamic sphere %d at (%.2f, %.2f, %.2f) radius=%.2f, velocity=(%.2f, %.2f, %.2f) speed=%.2f m/s\n",
+                i, pDynamic->position.m_x, pDynamic->position.m_y, pDynamic->position.m_z, pDynamic->sphereRadius,
+                pDynamic->velocity.m_x, pDynamic->velocity.m_y, pDynamic->velocity.m_z, speed);
+        }
+        #endif
         
         // Test against all static AABBs
         for (PrimitiveTypes::UInt32 j = 0; j < m_physicsComponents.m_size; j++)
@@ -299,14 +357,42 @@ void PhysicsManager::update(float deltaTime)
             if (!pStatic || !pStatic->isStatic || pStatic->shapeType != PhysicsComponent::AABB)
                 continue;  // Only test against static AABBs
             
+            #ifdef _DEBUG
+            staticCount++;
+            #endif
+            
             // Test collision
             CollisionInfo info;
+            
+            #ifdef _DEBUG
+            if (shouldDebug && dynamicCount == 1 && staticCount <= 3)  // Only show first sphere vs first 3 static
+            {
+                PEINFO("  Testing vs AABB %d: min=(%.2f, %.2f, %.2f) max=(%.2f, %.2f, %.2f)\n",
+                    j, pStatic->worldAABBMin.m_x, pStatic->worldAABBMin.m_y, pStatic->worldAABBMin.m_z,
+                    pStatic->worldAABBMax.m_x, pStatic->worldAABBMax.m_y, pStatic->worldAABBMax.m_z);
+            }
+            #endif
+            
             if (testSphereAABB(pDynamic, pStatic, info))
             {
                 collisions.add(info);
+                #ifdef _DEBUG
+                if (shouldDebug)
+                {
+                    PEINFO("  -> COLLISION with AABB %d! Penetration=%.4f\n", j, info.penetrationDepth);
+                }
+                #endif
             }
         }
     }
+    
+    #ifdef _DEBUG
+    if (shouldDebug)
+    {
+        PEINFO("Collision Detection: %d dynamic, %d static tested, %d collisions found\n",
+            dynamicCount, staticCount, collisions.m_size);
+    }
+    #endif
     
     // PHASE 3: Resolve collisions (simple response for now)
     #ifdef _DEBUG
@@ -328,22 +414,33 @@ void PhysicsManager::update(float deltaTime)
     {
         CollisionInfo& collision = collisions[i];
         
-        // Separate the objects
-        collision.object1->position.m_x += collision.normal.m_x * collision.penetrationDepth;
-        collision.object1->position.m_y += collision.normal.m_y * collision.penetrationDepth;
-        collision.object1->position.m_z += collision.normal.m_z * collision.penetrationDepth;
+        // Add a small separation buffer to prevent immediate re-collision
+        const float SEPARATION_BUFFER = 0.01f;  // 1cm safety margin
+        float totalSeparation = collision.penetrationDepth + SEPARATION_BUFFER;
         
-        // Stop velocity in the direction of the normal (prevent sinking)
+        // Separate the objects (push sphere out of AABB)
+        collision.object1->position.m_x += collision.normal.m_x * totalSeparation;
+        collision.object1->position.m_y += collision.normal.m_y * totalSeparation;
+        collision.object1->position.m_z += collision.normal.m_z * totalSeparation;
+        
+        // Calculate velocity along collision normal
         float velocityAlongNormal = 
             collision.object1->velocity.m_x * collision.normal.m_x +
             collision.object1->velocity.m_y * collision.normal.m_y +
             collision.object1->velocity.m_z * collision.normal.m_z;
         
-        if (velocityAlongNormal < 0.0f)  // Moving into the surface
+        // Remove velocity component going into the surface
+        if (velocityAlongNormal < 0.0f)
         {
+            // Remove normal component
             collision.object1->velocity.m_x -= velocityAlongNormal * collision.normal.m_x;
             collision.object1->velocity.m_y -= velocityAlongNormal * collision.normal.m_y;
             collision.object1->velocity.m_z -= velocityAlongNormal * collision.normal.m_z;
+            
+            // Apply friction to tangential velocity (sliding)
+            const float FRICTION = 0.95f;  // 5% velocity loss per collision
+            collision.object1->velocity.m_x *= FRICTION;
+            collision.object1->velocity.m_z *= FRICTION;  // Don't apply to Y (vertical)
         }
     }
     
