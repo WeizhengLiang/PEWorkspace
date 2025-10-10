@@ -202,6 +202,29 @@ void PhysicsManager::update(float deltaTime)
                     pPhysics->worldAABBMax.m_z = (worldCorners[j].m_z > pPhysics->worldAABBMax.m_z) ? worldCorners[j].m_z : pPhysics->worldAABBMax.m_z;
                 }
                 
+                // Add minimum thickness to AABBs (important for flat ground planes!)
+                const float MIN_AABB_THICKNESS = 0.1f;  // 10cm minimum thickness
+                
+                // Check each axis and add thickness if too thin
+                if (pPhysics->worldAABBMax.m_x - pPhysics->worldAABBMin.m_x < MIN_AABB_THICKNESS)
+                {
+                    float center = (pPhysics->worldAABBMin.m_x + pPhysics->worldAABBMax.m_x) * 0.5f;
+                    pPhysics->worldAABBMin.m_x = center - MIN_AABB_THICKNESS * 0.5f;
+                    pPhysics->worldAABBMax.m_x = center + MIN_AABB_THICKNESS * 0.5f;
+                }
+                if (pPhysics->worldAABBMax.m_y - pPhysics->worldAABBMin.m_y < MIN_AABB_THICKNESS)
+                {
+                    float center = (pPhysics->worldAABBMin.m_y + pPhysics->worldAABBMax.m_y) * 0.5f;
+                    pPhysics->worldAABBMin.m_y = center - MIN_AABB_THICKNESS * 0.5f;
+                    pPhysics->worldAABBMax.m_y = center + MIN_AABB_THICKNESS * 0.5f;
+                }
+                if (pPhysics->worldAABBMax.m_z - pPhysics->worldAABBMin.m_z < MIN_AABB_THICKNESS)
+                {
+                    float center = (pPhysics->worldAABBMin.m_z + pPhysics->worldAABBMax.m_z) * 0.5f;
+                    pPhysics->worldAABBMin.m_z = center - MIN_AABB_THICKNESS * 0.5f;
+                    pPhysics->worldAABBMax.m_z = center + MIN_AABB_THICKNESS * 0.5f;
+                }
+                
                 #ifdef _DEBUG
                 if (s_firstFrame)
                 {
