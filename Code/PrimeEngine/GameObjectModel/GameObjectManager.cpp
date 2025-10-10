@@ -312,56 +312,68 @@ void GameObjectManager::do_CREATE_MESH(Events::Event *pEvt)
 			PEASSERT(m_lastAddedSkelInstanceHandle.isValid(), "Adding skinned mesh, so we need a skeleton instance");
 			m_lastAddedSkelInstanceHandle.getObject<Component>()->addComponent(hMeshInstance);
 		}
+	else
+	{
+		// Declare parent SceneNode pointer that will be used for physics
+		SceneNode *pParentSN = nullptr;
+		
+		if (pRealEvent->hasCustomOrientation)
+		{
+			// need to create a scene node for this mesh
+			Handle hSN("SCENE_NODE", sizeof(SceneNode));
+			SceneNode *pSN = new(hSN) SceneNode(*m_pContext, m_arena, hSN);
+			pSN->addDefaultComponents();
+
+			pSN->addComponent(hMeshInstance);
+
+			RootSceneNode::Instance()->addComponent(hSN);
+			pSN->m_base.setPos(pRealEvent->m_pos);
+			pSN->m_base.setU(pRealEvent->m_u);
+			pSN->m_base.setV(pRealEvent->m_v);
+			pSN->m_base.setN(pRealEvent->m_n);
+			
+			pParentSN = pSN;  // Store for physics component creation
+		}
 		else
 		{
-			if (pRealEvent->hasCustomOrientation)
-			{
-				// need to create a scene node for this mesh
-				Handle hSN("SCENE_NODE", sizeof(SceneNode));
-				SceneNode *pSN = new(hSN) SceneNode(*m_pContext, m_arena, hSN);
-				pSN->addDefaultComponents();
-
-				pSN->addComponent(hMeshInstance);
-
-				RootSceneNode::Instance()->addComponent(hSN);
-				pSN->m_base.setPos(pRealEvent->m_pos);
-				pSN->m_base.setU(pRealEvent->m_u);
-				pSN->m_base.setV(pRealEvent->m_v);
-				pSN->m_base.setN(pRealEvent->m_n);
-				
-				// CREATE PHYSICS COMPONENT for static mesh
-				Mesh *pMesh = pMeshInstance->m_hAsset.getObject<Mesh>();
-				if (pMesh && pMesh->hasAABB())
-				{
-					PE::Handle hPhysics("PHYSICS_COMPONENT", sizeof(PhysicsComponent));
-					PhysicsComponent *pPhysics = new(hPhysics) PhysicsComponent(*m_pContext, m_arena, hPhysics);
-					pPhysics->addDefaultComponents();
-					
-					// Initialize physics properties
-					pPhysics->position = pSN->m_base.getPos();
-					pPhysics->velocity = Vector3(0.0f, 0.0f, 0.0f);
-					pPhysics->acceleration = Vector3(0.0f, 0.0f, 0.0f);
-					
-					// Static mesh uses AABB for collision
-					pPhysics->shapeType = PhysicsComponent::AABB;
-					pPhysics->aabbExtents = pMesh->getLocalAABB().extents;
-					
-					// Static mesh doesn't move
-					pPhysics->isStatic = true;
-					pPhysics->mass = 0.0f;  // Infinite mass (static)
-					
-					// Link to SceneNode
-					pPhysics->m_linkedSceneNode = pSN;
-					
-					// Add to PhysicsManager
-					PhysicsManager::Instance()->addComponent(hPhysics);
-				}
-			}
-			else
-			{
-				RootSceneNode::Instance()->addComponent(hMeshInstance);
-			}
+			RootSceneNode::Instance()->addComponent(hMeshInstance);
+			pParentSN = RootSceneNode::Instance();  // Use root as parent
 		}
+		
+		// CREATE PHYSICS COMPONENT for ALL static meshes (not just custom orientation)
+		Mesh *pMesh = pMeshInstance->m_hAsset.getObject<Mesh>();
+		if (pMesh && pMesh->hasAABB() && pParentSN)
+		{
+			PE::Handle hPhysics("PHYSICS_COMPONENT", sizeof(PhysicsComponent));
+			PhysicsComponent *pPhysics = new(hPhysics) PhysicsComponent(*m_pContext, m_arena, hPhysics);
+			pPhysics->addDefaultComponents();
+			
+			const PE::AABB& aabb = pMesh->getLocalAABB();
+			
+			// Initialize physics properties
+			// Store initial position - PhysicsManager will handle world transform in update()
+			pPhysics->position = pParentSN->m_base.getPos();
+			pPhysics->localCenterOffset = aabb.center;  // Store in LOCAL space
+			pPhysics->velocity = Vector3(0.0f, 0.0f, 0.0f);
+			pPhysics->acceleration = Vector3(0.0f, 0.0f, 0.0f);
+			
+			// Static mesh uses AABB for collision
+			pPhysics->shapeType = PhysicsComponent::AABB;
+			pPhysics->aabbExtents = aabb.extents;
+			
+			// Static mesh doesn't move
+			pPhysics->isStatic = true;
+			pPhysics->mass = 0.0f;  // Infinite mass (static)
+			
+			// Link to SceneNode
+			pPhysics->m_linkedSceneNode = pParentSN;
+			
+			// Add to PhysicsManager
+			PhysicsManager::Instance()->addComponent(hPhysics);
+			
+			PEINFO("Created physics component for mesh: %s\n", pMesh->m_meshName);
+		}
+	}
 
 		if (!haveOtherObject)
 			m_pContext->getLuaEnvironment()->pushHandleAsFieldAndSet(pRealEvent->m_peuuid, hMeshInstance);
