@@ -364,8 +364,13 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 	projectionViewWorldMatrix = projectionViewWorldMatrix * worldMatrix;
 
 #ifdef _DEBUG
+	// ========== TOGGLE: MESH AABB DEBUG RENDERING ==========
+	// Set to true to show green AABB boxes for frustum culling volumes
+	// Set to false to disable (improves performance)
+	static const bool ENABLE_MESH_AABB_DEBUG_RENDER = false;  // Change to true to enable
+	
 	// Add AABB debug rendering for ALL meshes that have AABBs
-	if (pMeshCaller->hasAABB()) 
+	if (ENABLE_MESH_AABB_DEBUG_RENDER && pMeshCaller->hasAABB()) 
 	{
 		// Get the DebugRenderer instance
 		PE::Components::DebugRenderer* pDebugRenderer = PE::Components::DebugRenderer::Instance();

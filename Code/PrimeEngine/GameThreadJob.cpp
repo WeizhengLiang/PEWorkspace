@@ -376,8 +376,13 @@ int ClientGame::runGameFrame()
 			//debug draw root and grid
 			DebugRenderer::Instance()->createRootLineMesh();// send event while the array is on the stack
 			
+			// ========== TOGGLE: PHYSICS DEBUG RENDERING ==========
+			// Set to true to show physics collider boxes (magenta=AABB, cyan=sphere)
+			// Set to false to disable (improves performance significantly!)
+			static const bool ENABLE_PHYSICS_DEBUG_RENDER = true;  // Change to false to disable
+			
 			// Send event to render physics debug shapes (ECS event-based approach)
-			if (PhysicsManager::Instance())
+			if (ENABLE_PHYSICS_DEBUG_RENDER && PhysicsManager::Instance())
 			{
 				Event_PHYSICS_DEBUG_RENDER physicsDebugEvt;
 				PhysicsManager::Instance()->handleEvent(&physicsDebugEvt);
