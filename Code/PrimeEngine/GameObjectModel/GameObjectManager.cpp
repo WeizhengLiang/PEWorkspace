@@ -359,12 +359,8 @@ void GameObjectManager::do_CREATE_MESH(Events::Event *pEvt)
 			
 			// Add physics only to these objects (ground, buildings, walls, etc.)
 			if (strstr(meshName, "cobbleplane.x_pplaneshape1_mesh.mesha") != nullptr ||      // Ground planes
-			    strstr(meshName, "SoldierTransform.mesha") != nullptr ||                     // Soldier
-			    strstr(meshName, "m98.x_m98main_mesh.mesha") != nullptr ||                   // Gun
-			    strstr(meshName, "imrod.x_imrodmesh_mesh.mesha") != nullptr ||               // Imrod
-			    strstr(meshName, "nazicar.x_carmesh_mesh.mesha") != nullptr ||               // nazi car
-			    strstr(meshName, "imrod") != nullptr ||      // Buildings (imrod)
-			    strstr(meshName, "obstacle") != nullptr)     // Obstacles
+				strstr(meshName, "nazicar.x_carmesh_mesh.mesha") != nullptr)               // nazi car
+
 			{
 				needsPhysics = true;
 			}
