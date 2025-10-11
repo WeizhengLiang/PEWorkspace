@@ -147,7 +147,9 @@ void PhysicsManager::update(float deltaTime)
     }
     #endif
     
-    // PHASE 0: Sync physics positions from SceneNode world transforms (for newly created/static objects)
+    // PHASE 0: Sync physics positions from SceneNode world transforms
+    // - STATIC objects: Full sync (position never changes)
+    // - DYNAMIC objects: Sync X/Z from AI (horizontal), keep Y from physics (gravity)
     static bool s_firstFrame = true;
     for (PrimitiveTypes::UInt32 i = 0; i < m_physicsComponents.m_size; i++)
     {
@@ -279,6 +281,39 @@ void PhysicsManager::update(float deltaTime)
                     pPhysics->worldAABBMax = center + scaledExtents;
                 }
             }
+        }
+        
+        // For dynamic objects: Sync HORIZONTAL (X/Z) from AI, keep VERTICAL (Y) from physics
+        if (pPhysics && pPhysics->m_linkedSceneNode && !pPhysics->isStatic)
+        {
+            // AI has already updated SceneNode position (horizontal movement from waypoints)
+            // We want to respect AI's X/Z while physics controls Y (gravity)
+            
+            // Get the SceneNode's position (AI's desired position)
+            Vector3 sceneNodePos = pPhysics->m_linkedSceneNode->m_base.getPos();
+            
+            // Get the world transform to extract rotation
+            Matrix4x4& worldTransform = pPhysics->m_linkedSceneNode->m_worldTransform;
+            
+            // Transform the local center offset by rotation only (not translation)
+            Vector3 worldCenterOffset = Vector3(
+                worldTransform.m[0][0] * pPhysics->localCenterOffset.m_x + 
+                worldTransform.m[0][1] * pPhysics->localCenterOffset.m_y + 
+                worldTransform.m[0][2] * pPhysics->localCenterOffset.m_z,
+                
+                worldTransform.m[1][0] * pPhysics->localCenterOffset.m_x + 
+                worldTransform.m[1][1] * pPhysics->localCenterOffset.m_y + 
+                worldTransform.m[1][2] * pPhysics->localCenterOffset.m_z,
+                
+                worldTransform.m[2][0] * pPhysics->localCenterOffset.m_x + 
+                worldTransform.m[2][1] * pPhysics->localCenterOffset.m_y + 
+                worldTransform.m[2][2] * pPhysics->localCenterOffset.m_z
+            );
+            
+            // Update physics position: AI controls X/Z, physics controls Y
+            pPhysics->position.m_x = sceneNodePos.m_x + worldCenterOffset.m_x;
+            pPhysics->position.m_z = sceneNodePos.m_z + worldCenterOffset.m_z;
+            // Keep pPhysics->position.m_y unchanged - physics (gravity) controls vertical!
         }
     }
     
