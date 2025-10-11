@@ -490,8 +490,8 @@ void SingleHandler_DRAW::gatherDrawCallsForRange(Mesh *pMeshCaller, DrawList *pD
 		int iRange,
 		Events::Event_GATHER_DRAWCALLS *pDrawEvent, Events::Event_GATHER_DRAWCALLS_Z_ONLY *pZOnlyDrawEvent)
 {
-	printf("DEBUG: gatherDrawCallsForRange called for mesh '%s', range %d\n", pMeshCaller->getMeshName(), iRange);
-	printf("DEBUG: Mesh has %d instances, %d visible instances\n", pMeshCaller->m_instances.m_size, pMeshCaller->m_numVisibleInstances);
+	//printf("DEBUG: gatherDrawCallsForRange called for mesh '%s', range %d\n", pMeshCaller->getMeshName(), iRange);
+	//printf("DEBUG: Mesh has %d instances, %d visible instances\n", pMeshCaller->m_instances.m_size, pMeshCaller->m_numVisibleInstances);
 	
 	// we might have several passes (several effects) so we need to check which effect list to use
 	PEStaticVector<PE::Handle, 4> *pEffectsForRange = NULL;
@@ -666,15 +666,15 @@ void SingleHandler_DRAW::gatherDrawCallsForRange(Mesh *pMeshCaller, DrawList *pD
 				}
 
                 iSrcInstanceInBoneSegment = iSrcInstance; // reset instance id for each bone segment since we want to process same instances
-                printf("DEBUG: Starting culled instance loop: iSrcInstanceInBoneSegment=%d, instances.m_size=%d\n", 
-                    iSrcInstanceInBoneSegment, pMeshCaller->m_instances.m_size);
+                //printf("DEBUG: Starting culled instance loop: iSrcInstanceInBoneSegment=%d, instances.m_size=%d\n", 
+                    //iSrcInstanceInBoneSegment, pMeshCaller->m_instances.m_size);
                 while(iSrcInstanceInBoneSegment < pMeshCaller->m_instances.m_size && 
                       pMeshCaller->m_instances[iSrcInstanceInBoneSegment].getObject<MeshInstance>()->m_culledOut)
                 {
-                    printf("DEBUG: Instance %d is culled, incrementing...\n", iSrcInstanceInBoneSegment);
+                    //printf("DEBUG: Instance %d is culled, incrementing...\n", iSrcInstanceInBoneSegment);
                     ++iSrcInstanceInBoneSegment;
                 }
-                printf("DEBUG: Culled instance loop ended: iSrcInstanceInBoneSegment=%d\n", iSrcInstanceInBoneSegment);
+                //printf("DEBUG: Culled instance loop ended: iSrcInstanceInBoneSegment=%d\n", iSrcInstanceInBoneSegment);
                 
                 // Check if all instances are culled - if so, skip this render group
                 if (iSrcInstanceInBoneSegment >= pMeshCaller->m_instances.m_size)
