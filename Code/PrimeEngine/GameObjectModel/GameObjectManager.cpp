@@ -340,39 +340,76 @@ void GameObjectManager::do_CREATE_MESH(Events::Event *pEvt)
 			pParentSN = RootSceneNode::Instance();  // Use root as parent
 		}
 		
-		// CREATE PHYSICS COMPONENT for ALL static meshes (not just custom orientation)
+		// CREATE PHYSICS COMPONENT for static meshes that need collision
 		Mesh *pMesh = pMeshInstance->m_hAsset.getObject<Mesh>();
 		if (pMesh && pMesh->hasAABB() && pParentSN)
 		{
-			PE::Handle hPhysics("PHYSICS_COMPONENT", sizeof(PhysicsComponent));
-			PhysicsComponent *pPhysics = new(hPhysics) PhysicsComponent(*m_pContext, m_arena, hPhysics);
-			pPhysics->addDefaultComponents();
+			// ========== INDUSTRY SOLUTION: SELECTIVE PHYSICS ==========
+			// Only add physics to meshes that actually need collision detection
+			// This avoids unnecessary collision tests and improves performance
 			
-			const PE::AABB& aabb = pMesh->getLocalAABB();
+			// Check mesh name to determine if it needs physics
+			bool needsPhysics = true;  // Default: add physics
+			const char* meshName = pMesh->m_meshName;
 			
-			// Initialize physics properties
-			// Store initial position - PhysicsManager will handle world transform in update()
-			pPhysics->position = pParentSN->m_base.getPos();
-			pPhysics->localCenterOffset = aabb.center;  // Store in LOCAL space
-			pPhysics->velocity = Vector3(0.0f, 0.0f, 0.0f);
-			pPhysics->acceleration = Vector3(0.0f, 0.0f, 0.0f);
+			// WHITELIST approach: Only specific objects get physics
+			// Uncomment this block and comment out BLACKLIST to use whitelist
 			
-			// Static mesh uses AABB for collision
-			pPhysics->shapeType = PhysicsComponent::AABB;
-			pPhysics->aabbExtents = aabb.extents;
+			needsPhysics = false;  // Start with no physics
 			
-			// Static mesh doesn't move
-			pPhysics->isStatic = true;
-			pPhysics->mass = 0.0f;  // Infinite mass (static)
+			// Add physics only to these objects (ground, buildings, walls, etc.)
+			if (strstr(meshName, "cobbleplane.x_pplaneshape1_mesh.mesha") != nullptr ||      // Ground planes
+			    strstr(meshName, "SoldierTransform.mesha") != nullptr ||                     // Soldier
+			    strstr(meshName, "m98.x_m98main_mesh.mesha") != nullptr ||                   // Gun
+			    strstr(meshName, "imrod.x_imrodmesh_mesh.mesha") != nullptr ||               // Imrod
+			    strstr(meshName, "nazicar.x_carmesh_mesh.mesha") != nullptr ||               // nazi car
+			    strstr(meshName, "imrod") != nullptr ||      // Buildings (imrod)
+			    strstr(meshName, "obstacle") != nullptr)     // Obstacles
+			{
+				needsPhysics = true;
+			}
 			
-			// Link to SceneNode
-			pPhysics->m_linkedSceneNode = pParentSN;
 			
-			// Add to PhysicsManager
-			PhysicsManager::Instance()->addComponent(hPhysics);
+			// BLACKLIST approach: Exclude decorative objects from physics
+			// This is currently active - decorations don't need collision
+			//if (strstr(meshName, "streetlight.x_main_mesh.mesha") != nullptr ||       // streetlight (decoration)
+			//    strstr(meshName, "brickspire.x_main_mesh.mesha") != nullptr)      // background building (decoration)
+			//{
+			//	needsPhysics = false;
+			//}
 			
-			// Removed: Spammy during level load (creates log for every static mesh)
-			// PEINFO("Created physics component for mesh: %s\n", pMesh->m_meshName);
+			if (needsPhysics)
+			{
+				PE::Handle hPhysics("PHYSICS_COMPONENT", sizeof(PhysicsComponent));
+				PhysicsComponent *pPhysics = new(hPhysics) PhysicsComponent(*m_pContext, m_arena, hPhysics);
+				pPhysics->addDefaultComponents();
+				
+				const PE::AABB& aabb = pMesh->getLocalAABB();
+				
+				// Initialize physics properties
+				// Store initial position - PhysicsManager will handle world transform in update()
+				pPhysics->position = pParentSN->m_base.getPos();
+				pPhysics->localCenterOffset = aabb.center;  // Store in LOCAL space
+				pPhysics->velocity = Vector3(0.0f, 0.0f, 0.0f);
+				pPhysics->acceleration = Vector3(0.0f, 0.0f, 0.0f);
+				
+				// Static mesh uses AABB for collision
+				pPhysics->shapeType = PhysicsComponent::AABB;
+				pPhysics->aabbExtents = aabb.extents;
+				
+				// Static mesh doesn't move
+				pPhysics->isStatic = true;
+				pPhysics->mass = 0.0f;  // Infinite mass (static)
+				
+				// Link to SceneNode
+				pPhysics->m_linkedSceneNode = pParentSN;
+				
+				// Add to PhysicsManager
+				PhysicsManager::Instance()->addComponent(hPhysics);
+				
+				// Removed: Spammy during level load (creates log for every static mesh)
+				// PEINFO("Created physics component for mesh: %s\n", pMesh->m_meshName);
+			}
 		}
 	}
 
