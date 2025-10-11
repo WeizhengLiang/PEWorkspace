@@ -44,7 +44,8 @@ PhysicsManager *PhysicsManager::Instance(){return s_hInstance.getObject<PhysicsM
 void PhysicsManager::addComponent(Handle hPhysicsComponent)
 {
 	m_physicsComponents.add(hPhysicsComponent);
-	PEINFO("PhysicsManager: Added physics component. Total count: %d\n", m_physicsComponents.m_size);
+	// Removed: Spammy during initialization - use debugger if needed
+	// PEINFO("PhysicsManager: Added physics component. Total count: %d\n", m_physicsComponents.m_size);
 }
 
 // Helper function: Test collision between sphere and AABB
@@ -58,17 +59,17 @@ static bool testSphereAABB(const PhysicsComponent* sphere, const PhysicsComponen
 	Vector3 aabbMin = aabb->worldAABBMin;
 	Vector3 aabbMax = aabb->worldAABBMax;
 	
-	// Debug: Check if AABB is uninitialized (all zeros)
-	#ifdef _DEBUG
-	static bool s_warnedAboutZeroAABB = false;
-	if (!s_warnedAboutZeroAABB && 
-	    aabbMin.m_x == 0.0f && aabbMin.m_y == 0.0f && aabbMin.m_z == 0.0f &&
-	    aabbMax.m_x == 0.0f && aabbMax.m_y == 0.0f && aabbMax.m_z == 0.0f)
-	{
-		PEINFO("WARNING: AABB has zero bounds! Not initialized?\n");
-		s_warnedAboutZeroAABB = true;
-	}
-	#endif
+	// Removed: AABB validation (use debugger if needed)
+	// #ifdef _DEBUG
+	// static bool s_warnedAboutZeroAABB = false;
+	// if (!s_warnedAboutZeroAABB && 
+	//     aabbMin.m_x == 0.0f && aabbMin.m_y == 0.0f && aabbMin.m_z == 0.0f &&
+	//     aabbMax.m_x == 0.0f && aabbMax.m_y == 0.0f && aabbMax.m_z == 0.0f)
+	// {
+	// 	PEINFO("WARNING: AABB has zero bounds! Not initialized?\n");
+	// 	s_warnedAboutZeroAABB = true;
+	// }
+	// #endif
 	
 	// Find closest point on AABB to sphere center
 	Vector3 closestPoint;
@@ -139,13 +140,14 @@ void PhysicsManager::update(float deltaTime)
         deltaTime = MAX_DELTA_TIME;
     }
     
-    #ifdef _DEBUG
-    static int dtCheckCount = 0;
-    if (dtCheckCount++ % 60 == 0)
-    {
-        PEINFO("PhysicsManager::update() deltaTime=%.4f seconds (%.1f FPS)\n", deltaTime, 1.0f/deltaTime);
-    }
-    #endif
+    // Removed: FPS logging every 60 frames (too spammy, kills performance)
+    // #ifdef _DEBUG
+    // static int dtCheckCount = 0;
+    // if (dtCheckCount++ % 60 == 0)
+    // {
+    //     PEINFO("PhysicsManager::update() deltaTime=%.4f seconds (%.1f FPS)\n", deltaTime, 1.0f/deltaTime);
+    // }
+    // #endif
     
     // PHASE 0: Sync physics positions from SceneNode world transforms
     // - STATIC objects: Full sync (position never changes)
@@ -250,14 +252,15 @@ void PhysicsManager::update(float deltaTime)
                     pPhysics->worldAABBMax.m_z = center + MIN_AABB_THICKNESS * 0.5f;
                 }
                 
-                #ifdef _DEBUG
-                if (s_firstFrame)
-                {
-                    PEINFO("Static AABB %d: min=(%.2f, %.2f, %.2f) max=(%.2f, %.2f, %.2f)\n",
-                        i, pPhysics->worldAABBMin.m_x, pPhysics->worldAABBMin.m_y, pPhysics->worldAABBMin.m_z,
-                        pPhysics->worldAABBMax.m_x, pPhysics->worldAABBMax.m_y, pPhysics->worldAABBMax.m_z);
-                }
-                #endif
+                // Removed: Static AABB logging (verbose during initialization)
+                // #ifdef _DEBUG
+                // if (s_firstFrame)
+                // {
+                //     PEINFO("Static AABB %d: min=(%.2f, %.2f, %.2f) max=(%.2f, %.2f, %.2f)\n",
+                //         i, pPhysics->worldAABBMin.m_x, pPhysics->worldAABBMin.m_y, pPhysics->worldAABBMin.m_z,
+                //         pPhysics->worldAABBMax.m_x, pPhysics->worldAABBMax.m_y, pPhysics->worldAABBMax.m_z);
+                // }
+                // #endif
                 
                 // Optional: Scale AABB if too conservative (shrink toward center)
                 if (AABB_SCALE_FACTOR < 1.0f)
@@ -357,31 +360,13 @@ void PhysicsManager::update(float deltaTime)
     
     // PHASE 2: Detect collisions
     Array<CollisionInfo> collisions(*m_pContext, m_arena, 64);
-    
-    #ifdef _DEBUG
-    static int testCount = 0;
-    bool shouldDebug = (testCount++ % 60 == 0);  // Every 60 frames
-    int dynamicCount = 0, staticCount = 0;
-    #endif
+
     
     for (PrimitiveTypes::UInt32 i = 0; i < m_physicsComponents.m_size; i++)
     {
         PhysicsComponent *pDynamic = m_physicsComponents[i].getObject<PhysicsComponent>();
         if (!pDynamic || pDynamic->isStatic || pDynamic->shapeType != PhysicsComponent::SPHERE)
             continue;  // Only test dynamic spheres
-        
-        #ifdef _DEBUG
-        dynamicCount++;
-        if (shouldDebug)
-        {
-            float speed = sqrtf(pDynamic->velocity.m_x * pDynamic->velocity.m_x + 
-                              pDynamic->velocity.m_y * pDynamic->velocity.m_y + 
-                              pDynamic->velocity.m_z * pDynamic->velocity.m_z);
-            PEINFO("Testing dynamic sphere %d at (%.2f, %.2f, %.2f) radius=%.2f, velocity=(%.2f, %.2f, %.2f) speed=%.2f m/s\n",
-                i, pDynamic->position.m_x, pDynamic->position.m_y, pDynamic->position.m_z, pDynamic->sphereRadius,
-                pDynamic->velocity.m_x, pDynamic->velocity.m_y, pDynamic->velocity.m_z, speed);
-        }
-        #endif
         
         // Test against all static AABBs
         for (PrimitiveTypes::UInt32 j = 0; j < m_physicsComponents.m_size; j++)
@@ -392,58 +377,17 @@ void PhysicsManager::update(float deltaTime)
             if (!pStatic || !pStatic->isStatic || pStatic->shapeType != PhysicsComponent::AABB)
                 continue;  // Only test against static AABBs
             
-            #ifdef _DEBUG
-            staticCount++;
-            #endif
-            
             // Test collision
             CollisionInfo info;
-            
-            #ifdef _DEBUG
-            if (shouldDebug && dynamicCount == 1 && staticCount <= 3)  // Only show first sphere vs first 3 static
-            {
-                PEINFO("  Testing vs AABB %d: min=(%.2f, %.2f, %.2f) max=(%.2f, %.2f, %.2f)\n",
-                    j, pStatic->worldAABBMin.m_x, pStatic->worldAABBMin.m_y, pStatic->worldAABBMin.m_z,
-                    pStatic->worldAABBMax.m_x, pStatic->worldAABBMax.m_y, pStatic->worldAABBMax.m_z);
-            }
-            #endif
             
             if (testSphereAABB(pDynamic, pStatic, info))
             {
                 collisions.add(info);
-                #ifdef _DEBUG
-                if (shouldDebug)
-                {
-                    PEINFO("  -> COLLISION with AABB %d! Penetration=%.4f\n", j, info.penetrationDepth);
-                }
-                #endif
             }
         }
     }
     
-    #ifdef _DEBUG
-    if (shouldDebug)
-    {
-        PEINFO("Collision Detection: %d dynamic, %d static tested, %d collisions found\n",
-            dynamicCount, staticCount, collisions.m_size);
-    }
-    #endif
-    
     // PHASE 3: Resolve collisions (simple response for now)
-    #ifdef _DEBUG
-    static int frameCount = 0;
-    if (collisions.m_size > 0 && (frameCount++ % 60 == 0))  // Log every 60 frames
-    {
-        PEINFO("Physics: %d collisions detected (frame %d)\n", collisions.m_size, frameCount);
-        for (PrimitiveTypes::UInt32 i = 0; i < collisions.m_size && i < 3; i++)  // Show first 3
-        {
-            PEINFO("  Collision %d: sphere at (%.2f, %.2f, %.2f), AABB min=(%.2f, %.2f, %.2f) max=(%.2f, %.2f, %.2f)\n",
-                i, collisions[i].object1->position.m_x, collisions[i].object1->position.m_y, collisions[i].object1->position.m_z,
-                collisions[i].object2->worldAABBMin.m_x, collisions[i].object2->worldAABBMin.m_y, collisions[i].object2->worldAABBMin.m_z,
-                collisions[i].object2->worldAABBMax.m_x, collisions[i].object2->worldAABBMax.m_y, collisions[i].object2->worldAABBMax.m_z);
-        }
-    }
-    #endif
     
     for (PrimitiveTypes::UInt32 i = 0; i < collisions.m_size; i++)
     {
@@ -548,11 +492,12 @@ void PhysicsManager::do_PHYSICS_DEBUG_RENDER(PE::Events::Event *pEvt)
     DebugRenderer* pDebugRenderer = DebugRenderer::Instance();
     if (!pDebugRenderer)
     {
-        PEINFO("PhysicsManager: DebugRenderer is NULL!\n");
+        // DebugRenderer not available - skip debug rendering
         return;
     }
     
-    PEINFO("PhysicsManager: Debug rendering %d physics components\n", m_physicsComponents.m_size);
+    // Removed: Spammy debug render logging every frame (huge FPS hit!)
+    // PEINFO("PhysicsManager: Debug rendering %d physics components\n", m_physicsComponents.m_size);
     
     // Iterate through all physics components and draw their shapes
     for (PrimitiveTypes::UInt32 i = 0; i < m_physicsComponents.m_size; i++)
@@ -567,9 +512,6 @@ void PhysicsManager::do_PHYSICS_DEBUG_RENDER(PE::Events::Event *pEvt)
             const int segments = 16;  // Number of line segments per circle
             const float radius = pPhysics->sphereRadius;
             const Vector3& center = pPhysics->position;
-            
-            PEINFO("  Drawing SPHERE at (%.2f, %.2f, %.2f) radius=%.2f\n", 
-                center.m_x, center.m_y, center.m_z, radius);
             
             // Color: Cyan for dynamic, Yellow for static
             Vector3 color = pPhysics->isStatic ? Vector3(1.0f, 1.0f, 0.0f) : Vector3(0.0f, 1.0f, 1.0f);
@@ -641,9 +583,6 @@ void PhysicsManager::do_PHYSICS_DEBUG_RENDER(PE::Events::Event *pEvt)
             const Vector3& min = pPhysics->worldAABBMin;
             const Vector3& max = pPhysics->worldAABBMax;
             
-            PEINFO("  Drawing AABB min=(%.2f, %.2f, %.2f) max=(%.2f, %.2f, %.2f)\n", 
-                min.m_x, min.m_y, min.m_z, max.m_x, max.m_y, max.m_z);
-            
             // Color: Magenta for static AABBs
             Vector3 color(1.0f, 0.0f, 1.0f);
             
@@ -683,3 +622,4 @@ void PhysicsManager::do_PHYSICS_DEBUG_RENDER(PE::Events::Event *pEvt)
 
 }
 }
+

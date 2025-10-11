@@ -150,8 +150,9 @@ SoldierNPC::SoldierNPC(PE::GameContext &context, PE::MemoryArena arena, PE::Hand
 				                        extents.m_y * extents.m_y + 
 				                        extents.m_z * extents.m_z);
 				
-				PEINFO("Soldier sphere: AABB center=(%.2f, %.2f, %.2f), radius=%.2f\n",
-					localAABBCenter.m_x, localAABBCenter.m_y, localAABBCenter.m_z, calculatedRadius);
+				// Removed: Spammy during soldier creation
+				// PEINFO("Soldier sphere: AABB center=(%.2f, %.2f, %.2f), radius=%.2f\n",
+				//     localAABBCenter.m_x, localAABBCenter.m_y, localAABBCenter.m_z, calculatedRadius);
 			}
 			
 			// Initialize physics properties
