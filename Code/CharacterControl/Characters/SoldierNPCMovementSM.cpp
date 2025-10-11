@@ -129,16 +129,18 @@ void SoldierNPCMovementSM::do_UPDATE(PE::Events::Event *pEvt)
 		SceneNode* pSN = getParentsSceneNode();
 		if (pSN)
 		{
-			Vector3 curPos = pSN->m_base.getPos();
-			float dsqr = (m_targetPostion - curPos).lengthSqr();
+		Vector3 curPos = pSN->m_base.getPos();
+		float dsqr = (m_targetPostion - curPos).lengthSqr();
 
-			bool reached = true;
-			if (dsqr > 0.01f)
-			{
-				// not at the spot yet
-				Event_UPDATE* pRealEvt = (Event_UPDATE*)(pEvt);
-				float speed = (m_state == WALKING_TO_TARGET) ? 1.4f : 3.0f;
-				float allowedDisp = speed * pRealEvt->m_frameTime;
+		bool reached = true;
+		// Increased threshold from 0.01 (0.1 units) to 0.25 (0.5 units) for smoother stop
+		// This prevents "walking in place" when physics micro-adjusts position
+		if (dsqr > 0.25f)  // Stop within 0.5 units of waypoint
+		{
+			// not at the spot yet
+			Event_UPDATE* pRealEvt = (Event_UPDATE*)(pEvt);
+			float speed = (m_state == WALKING_TO_TARGET) ? 1.4f : 3.0f;
+			float allowedDisp = speed * pRealEvt->m_frameTime;
 
 				Vector3 dir = (m_targetPostion - curPos);
 				dir.normalize();
