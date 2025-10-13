@@ -3,6 +3,7 @@
 #include "PrimeEngine/Lua/LuaEnvironment.h"
 #include "PrimeEngine/Scene/SkeletonInstance.h"
 #include "PrimeEngine/Scene/MeshInstance.h"
+#include "PrimeEngine/Scene/Mesh.h"
 #include "PrimeEngine/Scene/RootSceneNode.h"
 #include "PrimeEngine/Scene/PhysicsManager.h"
 
@@ -58,11 +59,12 @@ SoldierNPC::SoldierNPC(PE::GameContext &context, PE::MemoryArena arena, PE::Hand
 	pMainSN->addDefaultComponents();
 
 	// offset the soldier position a bit for assignment 1 requirements
-	float kSpawnYOffset = 200.0f;
-	Vector3 temp_pos = pEvt->m_pos;
-	temp_pos.m_y += kSpawnYOffset;
+	//float kSpawnYOffset = 200.0f;
+	//Vector3 temp_pos = pEvt->m_pos;
+	//temp_pos.m_y += kSpawnYOffset;
 
-	pMainSN->m_base.setPos(temp_pos);
+	//pMainSN->m_base.setPos(temp_pos);
+	pMainSN->m_base.setPos(pEvt->m_pos);
 	pMainSN->m_base.setU(pEvt->m_u);
 	pMainSN->m_base.setV(pEvt->m_v);
 	pMainSN->m_base.setN(pEvt->m_n);
@@ -78,31 +80,7 @@ SoldierNPC::SoldierNPC(PE::GameContext &context, PE::MemoryArena arena, PE::Hand
 		addComponent(hSN, &allowedEvts[0]);
 	}
 
-	// CREATE PHYSICS COMPONENT for soldier
-	{
-		PE::Handle hPhysics("PHYSICS_COMPONENT", sizeof(PhysicsComponent));
-		PhysicsComponent *pPhysics = new(hPhysics) PhysicsComponent(*m_pContext, m_arena, hPhysics);
-		pPhysics->addDefaultComponents();
-		
-		// Initialize physics properties
-		pPhysics->position = pMainSN->m_base.getPos();
-		pPhysics->velocity = Vector3(0.0f, 0.0f, 0.0f);
-		pPhysics->acceleration = Vector3(0.0f, 0.0f, 0.0f);
-		
-		// Soldier uses a sphere for collision
-		pPhysics->shapeType = PhysicsComponent::SPHERE;
-		pPhysics->sphereRadius = 1.0f;  // 1 meter radius
-		
-		// Soldier is dynamic (affected by physics)
-		pPhysics->isStatic = false;
-		pPhysics->mass = 70.0f;  // 70 kg
-		
-		// Link to SceneNode
-		pPhysics->m_linkedSceneNode = pMainSN;
-		
-		// Add to PhysicsManager
-		PhysicsManager::Instance()->addComponent(hPhysics);
-	}
+	// Physics component will be created after mesh instance is loaded
 
 	int numskins = 1; // 8
 	for (int iSkin = 0; iSkin < numskins; ++iSkin)
@@ -146,6 +124,58 @@ SoldierNPC::SoldierNPC(PE::GameContext &context, PE::MemoryArena arena, PE::Hand
 		pMeshInstance->initFromFile(pEvt->m_meshFilename, pEvt->m_package, pEvt->m_threadOwnershipMask);
 		
 		pSkelInst->addComponent(hMeshInstance);
+
+		// CREATE PHYSICS COMPONENT for soldier (after mesh is loaded)
+		// NOTE: Must be called AFTER scene graph transformations are calculated!
+		// For now, we'll do a simple setup and rely on the first update to fix positioning
+		{
+			PE::Handle hPhysics("PHYSICS_COMPONENT", sizeof(PhysicsComponent));
+			PhysicsComponent *pPhysics = new(hPhysics) PhysicsComponent(*m_pContext, m_arena, hPhysics);
+			pPhysics->addDefaultComponents();
+			
+			// Calculate bounding sphere from mesh AABB (if available)
+			float calculatedRadius = 1.0f;  // Default fallback
+			Vector3 localAABBCenter(0.0f, 0.0f, 0.0f);
+			
+			// Try to get AABB from the soldier's mesh
+			Mesh *pMesh = pMeshInstance->m_hAsset.getObject<Mesh>();
+			if (pMesh && pMesh->hasAABB())
+			{
+				const PE::AABB& aabb = pMesh->getLocalAABB();
+				localAABBCenter = aabb.center;
+				
+				// Calculate bounding sphere radius: distance from center to furthest corner
+				Vector3 extents = aabb.extents;
+				calculatedRadius = sqrtf(extents.m_x * extents.m_x + 
+				                        extents.m_y * extents.m_y + 
+				                        extents.m_z * extents.m_z);
+				
+				// Removed: Spammy during soldier creation
+				// PEINFO("Soldier sphere: AABB center=(%.2f, %.2f, %.2f), radius=%.2f\n",
+				//     localAABBCenter.m_x, localAABBCenter.m_y, localAABBCenter.m_z, calculatedRadius);
+			}
+			
+			// Initialize physics properties
+			// Use simple position for now - PhysicsManager will sync from world transform
+			pPhysics->position = pMainSN->m_base.getPos();
+			pPhysics->localCenterOffset = localAABBCenter;  // Store in LOCAL space
+			pPhysics->velocity = Vector3(0.0f, 0.0f, 0.0f);
+			pPhysics->acceleration = Vector3(0.0f, 0.0f, 0.0f);
+			
+			// Soldier uses a sphere for collision
+			pPhysics->shapeType = PhysicsComponent::SPHERE;
+			pPhysics->sphereRadius = calculatedRadius;
+			
+			// Soldier is dynamic (affected by physics)
+			pPhysics->isStatic = false;
+			pPhysics->mass = 70.0f;  // 70 kg
+			
+			// Link to SceneNode
+			pPhysics->m_linkedSceneNode = pMainSN;
+			
+			// Add to PhysicsManager
+			PhysicsManager::Instance()->addComponent(hPhysics);
+		}
 
 		// add skin to scene node
 		pRotateSN->addComponent(hSkeletonInstance);

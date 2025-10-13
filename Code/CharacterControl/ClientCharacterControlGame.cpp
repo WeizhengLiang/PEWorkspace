@@ -191,7 +191,7 @@ int ClientCharacterControlGame::initGame()
     
     m_pContext->getGPUScreen()->AcquireRenderContextOwnership(m_pContext->m_gameThreadThreadOwnershipMask);
 	
-    bool spawnALotOfMeshes = true;
+    bool spawnALotOfMeshes = false;
     
     int maxX = 5; // maybe need more to get framerate lower
     

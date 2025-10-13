@@ -373,11 +373,23 @@ int ClientGame::runGameFrame()
 						Vector3(.0f, .075f, 0), 1.0f, m_pContext->m_gameThreadThreadOwnershipMask);
 				}
 				
-				//debug draw root and grid
-				DebugRenderer::Instance()->createRootLineMesh();// send event while the array is on the stack
+			//debug draw root and grid
+			DebugRenderer::Instance()->createRootLineMesh();// send event while the array is on the stack
+			
+			// ========== TOGGLE: PHYSICS DEBUG RENDERING ==========
+			// Set to true to show physics collider boxes (magenta=AABB, cyan=sphere)
+			// Set to false to disable (improves performance significantly!)
+			static const bool ENABLE_PHYSICS_DEBUG_RENDER = true;  // Change to false to disable
+			
+			// Send event to render physics debug shapes (ECS event-based approach)
+			if (ENABLE_PHYSICS_DEBUG_RENDER && PhysicsManager::Instance())
+			{
+				Event_PHYSICS_DEBUG_RENDER physicsDebugEvt;
+				PhysicsManager::Instance()->handleEvent(&physicsDebugEvt);
+			}
 
-				// call this to potentially generate meshes that were scheduled in debug draw of lines
-				DebugRenderer::Instance()->postPreDraw(m_pContext->m_gameThreadThreadOwnershipMask);
+			// call this to potentially generate meshes that were scheduled in debug draw of lines
+			DebugRenderer::Instance()->postPreDraw(m_pContext->m_gameThreadThreadOwnershipMask);
 
                 PE::IRenderer::checkForErrors("");
 

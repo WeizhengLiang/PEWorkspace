@@ -126,15 +126,15 @@ void DebugRenderer::createRootLineMesh()
 
 void DebugRenderer::createLineMesh(bool hasTransform, const Matrix4x4 &transform, float *pRawData, int numInRawData, float timeToLive, float scale /* = 1.0f*/)
 {
-	printf("DEBUG: createLineMesh called - EnableDebugRendering: %s, m_numAvailableLineLists: %d, numInRawData: %d, timeToLive: %.2f\n", 
-		EnableDebugRendering ? "true" : "false", m_numAvailableLineLists, numInRawData, timeToLive);
+	//printf("DEBUG: createLineMesh called - EnableDebugRendering: %s, m_numAvailableLineLists: %d, numInRawData: %d, timeToLive: %.2f\n", 
+		//EnableDebugRendering ? "true" : "false", m_numAvailableLineLists, numInRawData, timeToLive);
 
 	if (EnableDebugRendering && m_numAvailableLineLists)
 	{
 		int index = m_availableLineLists[--m_numAvailableLineLists];
 		Array<float> &list = m_lineLists[index];
 #ifdef _DEBUG
-		printf("DEBUG: Using line list index %d (available: %d)\n", index, m_numAvailableLineLists);
+		//printf("DEBUG: Using line list index %d (available: %d)\n", index, m_numAvailableLineLists);
 #endif
 		
 
@@ -180,8 +180,8 @@ void DebugRenderer::createLineMesh(bool hasTransform, const Matrix4x4 &transform
 	else
 	{
 #ifdef _DEBUG
-		printf("DEBUG: createLineMesh skipped - EnableDebugRendering: %s, m_numAvailableLineLists: %d\n", 
-			EnableDebugRendering ? "true" : "false", m_numAvailableLineLists);
+		//printf("DEBUG: createLineMesh skipped - EnableDebugRendering: %s, m_numAvailableLineLists: %d\n", 
+		//	EnableDebugRendering ? "true" : "false", m_numAvailableLineLists);
 #endif
 	}
 	
@@ -277,9 +277,9 @@ void DebugRenderer::do_PRE_GATHER_DRAWCALLS(Events::Event *pEvt)
 
 void DebugRenderer::postPreDraw(int &threadOwnershipMask)
 {
-	printf("DEBUG: DebugRenderer::postPreDraw called\n");
+	//printf("DEBUG: DebugRenderer::postPreDraw called\n");
 #ifdef _DEBUG
-	printf("DEBUG: DebugRenderer::postPreDraw called\n");
+	//printf("DEBUG: DebugRenderer::postPreDraw called\n");
 #endif
 	// need to generate lines meshes in this method
 
@@ -298,15 +298,15 @@ void DebugRenderer::postPreDraw(int &threadOwnershipMask)
 			{
 				totalSize += list.m_size;
 				activeLineLists++;
-				printf("DEBUG: LineList[%d] has %d vertices, lifetime: %.2f\n", i, list.m_size/6, m_lineListLifetimes[i]);
+				//printf("DEBUG: LineList[%d] has %d vertices, lifetime: %.2f\n", i, list.m_size/6, m_lineListLifetimes[i]);
 			}
 			else
 			{
-				printf("DEBUG: LineList[%d] has %d vertices but expired (lifetime: %.2f)\n", i, list.m_size/6, m_lineListLifetimes[i]);
+				//printf("DEBUG: LineList[%d] has %d vertices but expired (lifetime: %.2f)\n", i, list.m_size/6, m_lineListLifetimes[i]);
 			}
 		}
 	}
-	printf("DEBUG: Found %d active line lists with %d total vertices\n", activeLineLists, totalSize/6);
+	//printf("DEBUG: Found %d active line lists with %d total vertices\n", activeLineLists, totalSize/6);
 
 	Array<float> vertexData(*m_pContext, m_arena);
 	vertexData.reset(totalSize);
@@ -335,23 +335,23 @@ void DebugRenderer::postPreDraw(int &threadOwnershipMask)
 	pLineMeshInstance = m_hLineMeshInstances[m_currentlyDrawnLineMesh].getObject<MeshInstance>();
 	
 #ifdef _DEBUG
-	printf("DEBUG: DebugRenderer postPreDraw - totalSize: %d, vertexData.m_size: %d\n", totalSize, vertexData.m_size);
+	//printf("DEBUG: DebugRenderer postPreDraw - totalSize: %d, vertexData.m_size: %d\n", totalSize, vertexData.m_size);
 #endif
 
 	if (vertexData.m_size)
 	{
-		printf("DEBUG: Loading LineMesh with %d vertices (totalSize: %d)\n", totalSize/6, totalSize);
+		//printf("DEBUG: Loading LineMesh with %d vertices (totalSize: %d)\n", totalSize/6, totalSize);
 		pLineMesh->loadFrom3DPoints_needsRC(vertexData.getFirstPtr(), totalSize/6, "", threadOwnershipMask);
 		pLineMesh->setEnabled(true);
 		pLineMeshInstance->setEnabled(true);
-		printf("DEBUG: LineMesh enabled with %d vertices - enabled: %s, instance enabled: %s\n", 
-			totalSize/6, pLineMesh->isEnabled() ? "true" : "false", pLineMeshInstance->isEnabled() ? "true" : "false");
+		//printf("DEBUG: LineMesh enabled with %d vertices - enabled: %s, instance enabled: %s\n", 
+		//	totalSize/6, pLineMesh->isEnabled() ? "true" : "false", pLineMeshInstance->isEnabled() ? "true" : "false");
 	}
 	else
 	{
 		pLineMesh->setEnabled(false);
 		pLineMeshInstance->setEnabled(false);
-		printf("DEBUG: LineMesh disabled - no vertex data\n");
+		//printf("DEBUG: LineMesh disabled - no vertex data\n");
 	}
 	vertexData.reset(0);
 }

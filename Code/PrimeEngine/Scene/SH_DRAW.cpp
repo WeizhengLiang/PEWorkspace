@@ -364,14 +364,19 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 	projectionViewWorldMatrix = projectionViewWorldMatrix * worldMatrix;
 
 #ifdef _DEBUG
-	// Add AABB debug rendering ONLY for imrod mesh + test line
-	if (pMeshCaller->hasAABB() && strstr(pMeshCaller->getMeshName(), "imrod.x_imrodmesh_mesh.mesha")) 
+	// ========== TOGGLE: MESH AABB DEBUG RENDERING ==========
+	// Set to true to show green AABB boxes for frustum culling volumes
+	// Set to false to disable (improves performance)
+	static const bool ENABLE_MESH_AABB_DEBUG_RENDER = false;  // Change to true to enable
+	
+	// Add AABB debug rendering for ALL meshes that have AABBs
+	if (ENABLE_MESH_AABB_DEBUG_RENDER && pMeshCaller->hasAABB()) 
 	{
 		// Get the DebugRenderer instance
 		PE::Components::DebugRenderer* pDebugRenderer = PE::Components::DebugRenderer::Instance();
 		if (pDebugRenderer)
 		{
-			// Create AABB debug lines for imrod mesh instances
+			// Create AABB debug lines for mesh instances
 			// Get the active camera for frustum culling
 			PE::Components::Camera* pActiveCamera = PE::Components::CameraManager::Instance()->getActiveCamera();
 			PE::Components::CameraSceneNode* pCamSceneNode = nullptr;
@@ -437,8 +442,8 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 						{0,4}, {1,5}, {2,6}, {3,7}  // vertical edges
 					};
 
-					// Debug color (bright magenta for AABB to distinguish from coordinate axes)
-					Vector3 color(1.0f, 0.0f, 1.0f);  // MAGENTA color
+				// Debug color (green for mesh AABB / frustum culling volumes)
+				Vector3 color(0.0f, 1.0f, 0.0f);  // GREEN color
 
 					int pointIndex = 0;
 					for (int k = 0; k < 12; k++) {
@@ -485,8 +490,8 @@ void SingleHandler_DRAW::gatherDrawCallsForRange(Mesh *pMeshCaller, DrawList *pD
 		int iRange,
 		Events::Event_GATHER_DRAWCALLS *pDrawEvent, Events::Event_GATHER_DRAWCALLS_Z_ONLY *pZOnlyDrawEvent)
 {
-	printf("DEBUG: gatherDrawCallsForRange called for mesh '%s', range %d\n", pMeshCaller->getMeshName(), iRange);
-	printf("DEBUG: Mesh has %d instances, %d visible instances\n", pMeshCaller->m_instances.m_size, pMeshCaller->m_numVisibleInstances);
+	//printf("DEBUG: gatherDrawCallsForRange called for mesh '%s', range %d\n", pMeshCaller->getMeshName(), iRange);
+	//printf("DEBUG: Mesh has %d instances, %d visible instances\n", pMeshCaller->m_instances.m_size, pMeshCaller->m_numVisibleInstances);
 	
 	// we might have several passes (several effects) so we need to check which effect list to use
 	PEStaticVector<PE::Handle, 4> *pEffectsForRange = NULL;
@@ -661,15 +666,15 @@ void SingleHandler_DRAW::gatherDrawCallsForRange(Mesh *pMeshCaller, DrawList *pD
 				}
 
                 iSrcInstanceInBoneSegment = iSrcInstance; // reset instance id for each bone segment since we want to process same instances
-                printf("DEBUG: Starting culled instance loop: iSrcInstanceInBoneSegment=%d, instances.m_size=%d\n", 
-                    iSrcInstanceInBoneSegment, pMeshCaller->m_instances.m_size);
+                //printf("DEBUG: Starting culled instance loop: iSrcInstanceInBoneSegment=%d, instances.m_size=%d\n", 
+                    //iSrcInstanceInBoneSegment, pMeshCaller->m_instances.m_size);
                 while(iSrcInstanceInBoneSegment < pMeshCaller->m_instances.m_size && 
                       pMeshCaller->m_instances[iSrcInstanceInBoneSegment].getObject<MeshInstance>()->m_culledOut)
                 {
-                    printf("DEBUG: Instance %d is culled, incrementing...\n", iSrcInstanceInBoneSegment);
+                    //printf("DEBUG: Instance %d is culled, incrementing...\n", iSrcInstanceInBoneSegment);
                     ++iSrcInstanceInBoneSegment;
                 }
-                printf("DEBUG: Culled instance loop ended: iSrcInstanceInBoneSegment=%d\n", iSrcInstanceInBoneSegment);
+                //printf("DEBUG: Culled instance loop ended: iSrcInstanceInBoneSegment=%d\n", iSrcInstanceInBoneSegment);
                 
                 // Check if all instances are culled - if so, skip this render group
                 if (iSrcInstanceInBoneSegment >= pMeshCaller->m_instances.m_size)

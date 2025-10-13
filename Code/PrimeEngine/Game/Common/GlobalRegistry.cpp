@@ -83,10 +83,11 @@ void Register(PE::Components::LuaEnvironment *pLuaEnv, PE::GlobalRegistry *pRegi
 			{
 				PE::Events::Event::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
 					PE::Events::Event_ADDED_AS_COMPONENT::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
-					PE::Events::Event_UPDATE::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
-					PE::Events::Event_SCENE_GRAPH_UPDATE::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
-					PE::Events::Event_PRE_RENDER_needsRC::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
-					PE::Events::Event_GATHER_DRAWCALLS::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
+				PE::Events::Event_UPDATE::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
+				PE::Events::Event_SCENE_GRAPH_UPDATE::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
+				PE::Events::Event_PRE_RENDER_needsRC::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
+				PE::Events::Event_PHYSICS_DEBUG_RENDER::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
+				PE::Events::Event_GATHER_DRAWCALLS::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
 					PE::Events::Event_GATHER_DRAWCALLS_Z_ONLY::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
 					PE::Events::Event_CALCULATE_TRANSFORMATIONS::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);
 					PE::Events::Event_PRE_GATHER_DRAWCALLS::InitializeAndRegister(pLuaEnv, pRegistry, setLuaMetaDataOnly);

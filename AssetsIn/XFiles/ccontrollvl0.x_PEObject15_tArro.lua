@@ -9,6 +9,6 @@ args['myScript']="WayPoint.lua"
 args['myScriptPackage']="CharacterControl"
 
 args['name'] = '1'
-args['next'] = '2,3,4,5'
+args['next'] = '2,3'
 
 end -- required
