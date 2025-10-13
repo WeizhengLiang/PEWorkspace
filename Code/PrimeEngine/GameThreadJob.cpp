@@ -119,6 +119,13 @@ int ClientGame::runGameFrame()
             // UPDATE
             // Update game objects
             m_pContext->getGameObjectManager()->handleEvent(pGeneralEvt);
+            
+            // Update physics
+            if (PhysicsManager::Instance())
+            {
+                Event_UPDATE *updateEvt = (Event_UPDATE*)pGeneralEvt;
+                PhysicsManager::Instance()->update(updateEvt->m_frameTime);
+            }
         }
         else if (Event_CALCULATE_TRANSFORMATIONS::GetClassId() == pGeneralEvt->getClassId())
         {

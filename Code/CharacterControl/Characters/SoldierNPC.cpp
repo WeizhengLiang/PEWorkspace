@@ -4,6 +4,7 @@
 #include "PrimeEngine/Scene/SkeletonInstance.h"
 #include "PrimeEngine/Scene/MeshInstance.h"
 #include "PrimeEngine/Scene/RootSceneNode.h"
+#include "PrimeEngine/Scene/PhysicsManager.h"
 
 #include "SoldierNPC.h"
 #include "SoldierNPCAnimationSM.h"
@@ -56,7 +57,12 @@ SoldierNPC::SoldierNPC(PE::GameContext &context, PE::MemoryArena arena, PE::Hand
 	SceneNode *pMainSN = new(hSN) SceneNode(*m_pContext, m_arena, hSN);
 	pMainSN->addDefaultComponents();
 
-	pMainSN->m_base.setPos(pEvt->m_pos);
+	// offset the soldier position a bit for assignment 1 requirements
+	float kSpawnYOffset = 200.0f;
+	Vector3 temp_pos = pEvt->m_pos;
+	temp_pos.m_y += kSpawnYOffset;
+
+	pMainSN->m_base.setPos(temp_pos);
 	pMainSN->m_base.setU(pEvt->m_u);
 	pMainSN->m_base.setV(pEvt->m_v);
 	pMainSN->m_base.setN(pEvt->m_n);
@@ -70,6 +76,32 @@ SoldierNPC::SoldierNPC(PE::GameContext &context, PE::MemoryArena arena, PE::Hand
 	{
 		static int allowedEvts[] = {0};
 		addComponent(hSN, &allowedEvts[0]);
+	}
+
+	// CREATE PHYSICS COMPONENT for soldier
+	{
+		PE::Handle hPhysics("PHYSICS_COMPONENT", sizeof(PhysicsComponent));
+		PhysicsComponent *pPhysics = new(hPhysics) PhysicsComponent(*m_pContext, m_arena, hPhysics);
+		pPhysics->addDefaultComponents();
+		
+		// Initialize physics properties
+		pPhysics->position = pMainSN->m_base.getPos();
+		pPhysics->velocity = Vector3(0.0f, 0.0f, 0.0f);
+		pPhysics->acceleration = Vector3(0.0f, 0.0f, 0.0f);
+		
+		// Soldier uses a sphere for collision
+		pPhysics->shapeType = PhysicsComponent::SPHERE;
+		pPhysics->sphereRadius = 1.0f;  // 1 meter radius
+		
+		// Soldier is dynamic (affected by physics)
+		pPhysics->isStatic = false;
+		pPhysics->mass = 70.0f;  // 70 kg
+		
+		// Link to SceneNode
+		pPhysics->m_linkedSceneNode = pMainSN;
+		
+		// Add to PhysicsManager
+		PhysicsManager::Instance()->addComponent(hPhysics);
 	}
 
 	int numskins = 1; // 8
