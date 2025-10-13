@@ -6,6 +6,7 @@
 #include "PrimeEngine/Scene/SceneNode.h"
 
 #include "../Events/Events.h"
+#include "SoldierNPC.h"
 
 namespace CharacterControl{
 // events that can be sent to this state machine or sent by this state machine (like TARGET_REACHED)
@@ -25,8 +26,11 @@ struct SoldierNPCMovementSM_Event_MOVE_TO : public PE::Events::Event {
 struct SoldierNPCMovementSM_Event_STOP : public PE::Events::Event {
 	PE_DECLARE_CLASS(SoldierNPCMovementSM_Event_STOP);
 
-	SoldierNPCMovementSM_Event_STOP()
+	SoldierNPCMovementSM_Event_STOP(Vector3 targetPos = Vector3())
 	{}
+
+	CharacterControl::Components::SoldierNPC *m_targetPtr;
+	bool m_standShoot;
 };
 
 // sent by this state machine to its components. probably to behavior state machine
@@ -82,6 +86,7 @@ struct SoldierNPCMovementSM : public PE::Components::Component
 	//
 	// State
 	Vector3 m_targetPostion;
+	SoldierNPC *m_shootTargetPtr;
 	States m_state;
 };
 

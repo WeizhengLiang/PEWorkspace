@@ -101,10 +101,24 @@ void SoldierNPCMovementSM::do_SoldierNPCMovementSM_Event_MOVE_TO(PE::Events::Eve
 
 void SoldierNPCMovementSM::do_SoldierNPCMovementSM_Event_STOP(PE::Events::Event *pEvt)
 {
-	Events::SoldierNPCAnimSM_Event_STOP Evt;
+	SoldierNPCMovementSM_Event_STOP* pRealEvt = (SoldierNPCMovementSM_Event_STOP*)(pEvt);
 
-	SoldierNPC *pSol = getFirstParentByTypePtr<SoldierNPC>();
-	pSol->getFirstComponent<PE::Components::SceneNode>()->handleEvent(&Evt);
+	if (!pRealEvt->m_standShoot) {
+		m_state = STANDING; // can add another state if needed
+		Events::SoldierNPCAnimSM_Event_STOP Evt;
+
+		SoldierNPC* pSol = getFirstParentByTypePtr<SoldierNPC>();
+		pSol->getFirstComponent<PE::Components::SceneNode>()->handleEvent(&Evt);
+	}
+	else {
+		m_state = STANDING;
+		Events::SoldierNPCAnimSM_Event_STAND_SHOOT Evt;
+
+		m_shootTargetPtr = pRealEvt->m_targetPtr;
+
+		SoldierNPC* pSol = getFirstParentByTypePtr<SoldierNPC>();
+		pSol->getFirstComponent<PE::Components::SceneNode>()->handleEvent(&Evt);
+	}
 }
 
 void SoldierNPCMovementSM::do_UPDATE(PE::Events::Event *pEvt)
@@ -112,7 +126,7 @@ void SoldierNPCMovementSM::do_UPDATE(PE::Events::Event *pEvt)
 	if (m_state == WALKING_TO_TARGET || m_state == RUNNING_TO_TARGET)
 	{
 		// see if parent has scene node component
-		SceneNode *pSN = getParentsSceneNode();
+		SceneNode* pSN = getParentsSceneNode();
 		if (pSN)
 		{
 			Vector3 curPos = pSN->m_base.getPos();
@@ -122,7 +136,7 @@ void SoldierNPCMovementSM::do_UPDATE(PE::Events::Event *pEvt)
 			if (dsqr > 0.01f)
 			{
 				// not at the spot yet
-				Event_UPDATE *pRealEvt = (Event_UPDATE *)(pEvt);
+				Event_UPDATE* pRealEvt = (Event_UPDATE*)(pEvt);
 				float speed = (m_state == WALKING_TO_TARGET) ? 1.4f : 3.0f;
 				float allowedDisp = speed * pRealEvt->m_frameTime;
 
@@ -143,18 +157,18 @@ void SoldierNPCMovementSM::do_UPDATE(PE::Events::Event *pEvt)
 			if (reached)
 			{
 				m_state = STANDING;
-				
+
 				// target has been reached. need to notify all same level state machines (components of parent)
 				{
 					PE::Handle h("SoldierNPCMovementSM_Event_TARGET_REACHED", sizeof(SoldierNPCMovementSM_Event_TARGET_REACHED));
-					Events::SoldierNPCMovementSM_Event_TARGET_REACHED *pOutEvt = new(h) SoldierNPCMovementSM_Event_TARGET_REACHED();
+					Events::SoldierNPCMovementSM_Event_TARGET_REACHED* pOutEvt = new(h) SoldierNPCMovementSM_Event_TARGET_REACHED();
 
 					PE::Handle hParent = getFirstParentByType<Component>();
 					if (hParent.isValid())
 					{
 						hParent.getObject<Component>()->handleEvent(pOutEvt);
 					}
-					
+
 					// release memory now that event is processed
 					h.release();
 				}
@@ -166,18 +180,60 @@ void SoldierNPCMovementSM::do_UPDATE(PE::Events::Event *pEvt)
 					// so can send event to animation state machine to stop
 					{
 						Events::SoldierNPCAnimSM_Event_STOP evt;
-						
-						SoldierNPC *pSol = getFirstParentByTypePtr<SoldierNPC>();
+
+						SoldierNPC* pSol = getFirstParentByTypePtr<SoldierNPC>();
 						pSol->getFirstComponent<PE::Components::SceneNode>()->handleEvent(&evt);
 					}
 				}
 			}
 		}
+	}else if(m_state == STANDING){
+
+		if (SceneNode* pSN = getParentsSceneNode())
+		{
+			const Vector3 curPos = pSN->m_base.getPos();
+			Vector3 m_shootTargetPostion = Vector3();
+			
+			// Check if we have a valid target pointer before accessing it
+			if (m_shootTargetPtr)
+			{
+				SceneNode* pTargetSN = m_shootTargetPtr->getFirstComponent<SceneNode>();
+				if (pTargetSN)
+				{
+					m_shootTargetPostion = pTargetSN->m_base.getPos();
+					
+					Vector3 toTarget = m_shootTargetPostion - curPos;
+
+					// Only turn if the target isnt right on top of us
+					constexpr float faceEpsilon = 0.001f; // ~1mm in engine units
+					if (toTarget.lengthSqr() > faceEpsilon)
+					{
+						toTarget.normalize();
+
+						// Rotate toward the target direction smoothly
+						// Assume were inside Event_UPDATE with frameTime available
+						auto* pRealEvt = static_cast<Event_UPDATE*>(pEvt);
+						//PE_ASSERT(pRealEvt && "Event_UPDATE required here");
+
+						constexpr float turnRate = 3.14f; // rad/sec = 180 per second, tuneable
+						pSN->m_base.turnInDirection(toTarget, turnRate * pRealEvt->m_frameTime);
+					}
+					else
+					{
+						// Target coincides with position do nothing
+					}
+					
+					// Continuously trigger shooting animation while we have a valid target
+					Events::SoldierNPCAnimSM_Event_STAND_SHOOT shootEvt;
+					SoldierNPC* pSol = getFirstParentByTypePtr<SoldierNPC>();
+					pSol->getFirstComponent<PE::Components::SceneNode>()->handleEvent(&shootEvt);
+				}
+			}
+		}
+		
+
 	}
 }
 
+
 }}
-
-
-
-

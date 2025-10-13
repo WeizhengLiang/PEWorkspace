@@ -17,6 +17,9 @@ struct SoldierNPC : public PE::Components::Component
 	SoldierNPC(PE::GameContext &context, PE::MemoryArena arena, PE::Handle hMyself, Events::Event_CreateSoldierNPC *pEvt);
 
 	virtual void addDefaultComponents();
+
+	int m_lookForTargetAndShoot;
+	int m_npcType;
 };
 }; // namespace Components
 }; // namespace CharacterControl

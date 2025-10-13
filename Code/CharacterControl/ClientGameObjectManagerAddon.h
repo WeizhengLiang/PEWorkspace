@@ -5,6 +5,7 @@
 #include "Events/Events.h"
 
 #include "WayPoint.h"
+#include "Characters/SoldierNPC.h"
 
 namespace CharacterControl
 {
@@ -53,6 +54,7 @@ struct ClientGameObjectManagerAddon : public GameObjectManagerAddon
 	//
 	// waypoint search
 	WayPoint *getWayPoint(const char *name);
+	SoldierNPC *getFirstTargetableSoldierObject();
 };
 
 

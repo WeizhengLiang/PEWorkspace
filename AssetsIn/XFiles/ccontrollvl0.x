@@ -256,17 +256,6 @@ Frame PEObject45_nazi_rep {
 		1.000000,0.000000,-0.000000,0.000000,0.000000,1.000000,-0.000000,0.000000,-0.000000,-0.000000,1.000000,0.000000,199.107586,0.000000,-0.000000,1.000000;;
 	}
 }
-Frame PEObject46_nazi_rep {
-	MetaScript {
-		"ccontrollvl0.x_PEObject46_nazi_.lua"
-	}
-	PEUUID {
-		0x37f7148f, 0x2bfc11e4, 0xbf57b8e8, 0x560d92e3
-	}
-	FrameTransformMatrix {
-		1.000000,0.000000,-0.000000,0.000000,0.000000,1.000000,-0.000000,0.000000,-0.000000,-0.000000,1.000000,0.000000,0.000000,0.000000,-0.000000,1.000000;;
-	}
-}
 Frame PEObject50_tArrow {
 	MetaScript {
 		"ccontrollvl0.x_PEObject50_tArro.lua"
@@ -276,5 +265,82 @@ Frame PEObject50_tArrow {
 	}
 	FrameTransformMatrix {
 		0.024957,0.000000,-0.999689,0.000000,-0.000000,1.000000,-0.000000,0.000000,0.999689,0.000000,0.024957,0.000000,-101.936076,0.000000,107.188923,1.000000;;
+	}
+}
+Frame PEObject51_nazi_rep {
+	MetaScript {
+		"ccontrollvl0.x_PEObject51_nazi_.lua"
+	}
+	PEUUID {
+		0xe2298d21, 0x91fe11f0, 0xbda2f43b, 0xd8263289
+	}
+	FrameTransformMatrix {
+		-0.775647,0.000000,-0.631166,0.000000,-0.000000,1.000000,-0.000000,0.000000,0.631166,0.000000,-0.775647,0.000000,-821.751381,0.000000,1141.349360,1.000000;;
+	}
+}
+Frame PEObject52_tArrow {
+	MetaScript {
+		"ccontrollvl0.x_PEObject52_tArro.lua"
+	}
+	PEUUID {
+		0x8f87b90f, 0x91ff11f0, 0x995ef43b, 0xd8263289
+	}
+	FrameTransformMatrix {
+		-0.997383,-0.000000,0.072305,0.000000,0.000000,1.000000,0.000000,0.000000,-0.072305,-0.000000,-0.997383,0.000000,-855.095379,0.000000,797.265820,1.000000;;
+	}
+}
+Frame PEObject53_tArrow {
+	MetaScript {
+		"ccontrollvl0.x_PEObject53_tArro.lua"
+	}
+	PEUUID {
+		0xae5c06c0, 0x91ff11f0, 0xa90ff43b, 0xd8263289
+	}
+	FrameTransformMatrix {
+		-0.257309,0.000000,-0.966329,0.000000,-0.000000,1.000000,-0.000000,0.000000,0.966329,0.000000,-0.257309,0.000000,-748.862848,0.000000,-0.000000,1.000000;;
+	}
+}
+Frame PEObject54_tArrow {
+	MetaScript {
+		"ccontrollvl0.x_PEObject54_tArro.lua"
+	}
+	PEUUID {
+		0xbe43fc9e, 0x91ff11f0, 0x9e30f43b, 0xd8263289
+	}
+	FrameTransformMatrix {
+		0.903648,0.000000,-0.428275,0.000000,-0.000000,1.000000,-0.000000,0.000000,0.428275,0.000000,0.903648,0.000000,-212.764110,0.000000,-47.374694,1.000000;;
+	}
+}
+Frame PEObject55_tArrow {
+	MetaScript {
+		"ccontrollvl0.x_PEObject55_tArro.lua"
+	}
+	PEUUID {
+		0xcb37dfd1, 0x91ff11f0, 0x9b17f43b, 0xd8263289
+	}
+	FrameTransformMatrix {
+		0.773857,0.000000,0.633360,0.000000,0.000000,1.000000,-0.000000,0.000000,-0.633360,-0.000000,0.773857,0.000000,32.241438,0.000000,427.243260,1.000000;;
+	}
+}
+Frame PEObject56_tArrow {
+	MetaScript {
+		"ccontrollvl0.x_PEObject56_tArro.lua"
+	}
+	PEUUID {
+		0xd87b699e, 0x91ff11f0, 0xaa32f43b, 0xd8263289
+	}
+	FrameTransformMatrix {
+		0.034298,0.000000,0.999412,0.000000,0.000000,1.000000,-0.000000,0.000000,-0.999412,-0.000000,0.034298,0.000000,-313.716816,0.000000,714.535974,1.000000;;
+	}
+}
+Frame PEObject58_nazi_rep {
+	MetaScript {
+		"ccontrollvl0.x_PEObject58_nazi_.lua"
+	}
+	PEUUID {
+		0x4f171840, 0x92a811f0, 0xb004f43b, 0xd8263289
+	}
+	FrameTransformMatrix {
+		1.000000,0.000000,-0.000000,0.000000,0.000000,1.000000,-0.000000,0.000000,-0.000000,-0.000000,1.000000,0.000000,0.000000,0.000000,-0.000000,1.000000;;
 	}
 }
