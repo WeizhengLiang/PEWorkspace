@@ -31,9 +31,6 @@ struct LineMesh : public Mesh
 
 	virtual void addDefaultComponents();
 
-	PE_DECLARE_IMPLEMENT_EVENT_HANDLER_WRAPPER(do_GATHER_DRAWCALLS);
-	virtual void do_GATHER_DRAWCALLS(Events::Event *pEvt);
-
 	void loadFrom3DPoints_needsRC(float *vals, int numPoints, const char *techName, int &threadOwnershipMask);
 
 	PrimitiveTypes::Bool m_loaded;

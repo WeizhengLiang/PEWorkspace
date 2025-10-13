@@ -18,12 +18,14 @@
 // Sibling/Children includes
 #include "Mesh.h"
 #include "MeshInstance.h"
+#include "DebugRenderer.h"
 #include "SkeletonInstance.h"
 #include "SceneNode.h"
 #include "RootSceneNode.h"
 #include "DrawList.h"
 #include "PrimeEngine/Scene/DefaultAnimationSM.h"
 #include "PrimeEngine/Geometry/IndexBufferCPU/IndexBufferCPU.h"
+#include "PrimeEngine/Scene/CameraManager.h"
 
 #include "PrimeEngine/APIAbstraction/GPUBuffers/AnimSetBufferGPU.h"
 #include "PrimeEngine/Render/ShaderActions/SetInstanceControlConstantsShaderAction.h"
@@ -179,10 +181,47 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 {
 	// the mesh is who we are drawing for is previous distributor
 	// and this object is current distributor
+	printf("DEBUG: SingleHandler_DRAW::do_GATHER_DRAWCALLS called\n");
 	Component *pCaller = pEvt->m_prevDistributor.getObject<Component>();
+	printf("DEBUG: Got caller component: %p\n", pCaller);
 	Mesh *pMeshCaller = (Mesh *)pCaller;
+	printf("DEBUG: Cast to Mesh successful: %p\n", pMeshCaller);
+	
+	// CRITICAL: Add debug output IMMEDIATELY to catch the crash
+	printf("DEBUG: About to access mesh name...\n");
+	const char* meshName = pMeshCaller->getMeshName();
+	printf("DEBUG: Mesh name retrieved: '%s'\n", meshName);
+	printf("DEBUG: About to access instances array...\n");
+	int instanceCount = pMeshCaller->m_instances.m_size;
+	printf("DEBUG: Instances array size: %d\n", instanceCount);
+	
+	// CRITICAL: Add debug output at the END of function to catch if we complete successfully
+	printf("DEBUG: Starting processing for mesh '%s' with %d instances...\n", meshName, instanceCount);
+	
+#ifdef _DEBUG
+	// DISABLED: Debug output to see what meshes are being processed
+	/*
+	printf("DEBUG: Processing mesh '%s' [%p] with %d instances, hasAABB: %s\n", 
+		pMeshCaller->getMeshName(), pMeshCaller, pMeshCaller->m_instances.m_size, 
+		pMeshCaller->hasAABB() ? "true" : "false");
+	
+	// More detailed AABB info if available
+	if (pMeshCaller->hasAABB()) {
+		const PE::AABB& aabb = pMeshCaller->getLocalAABB();
+		printf("  -> AABB center: (%.2f, %.2f, %.2f), extents: (%.2f, %.2f, %.2f)\n", 
+			aabb.center.m_x, aabb.center.m_y, aabb.center.m_z,
+			aabb.extents.m_x, aabb.extents.m_y, aabb.extents.m_z);
+	} else {
+		printf("  -> No AABB data available for mesh '%s' [%p]\n", pMeshCaller->getMeshName(), pMeshCaller);
+	}
+	*/
+#endif
+	
 	if (pMeshCaller->m_instances.m_size == 0)
+	{
+		printf("DEBUG: No instances, returning early\n");
 		return; // no instances of this mesh
+	}
 	Events::Event_GATHER_DRAWCALLS *pDrawEvent = NULL;
 	Events::Event_GATHER_DRAWCALLS_Z_ONLY *pZOnlyDrawEvent = NULL;
 
@@ -195,25 +234,198 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
     
     // check for bounding volumes here and mark each instance as visible or not visible and set m_numVisibleInstances to number of visible instances
     
-    // debug testing of instance culling. do collision check instead.
-    // remove false && to enable
-    if (false && pMeshCaller->m_performBoundingVolumeCulling)
+    // FRUSTUM CULLING - test each mesh instance against camera frustum
+    printf("DEBUG: About to check frustum culling conditions...\n");
+    printf("DEBUG: m_performBoundingVolumeCulling: %s\n", pMeshCaller->m_performBoundingVolumeCulling ? "true" : "false");
+    printf("DEBUG: pDrawEvent: %p\n", pDrawEvent);
+    
+    if (pMeshCaller->m_performBoundingVolumeCulling && pDrawEvent)
     {
+        printf("DEBUG: FRUSTUM CULLING ENABLED for mesh '%s' with %d instances\n", 
+            pMeshCaller->getMeshName(), pMeshCaller->m_instances.m_size);
         pMeshCaller->m_numVisibleInstances = 0;
         
+        printf("DEBUG: About to start frustum culling loop...\n");
         for (int iInst = 0; iInst < pMeshCaller->m_instances.m_size; ++iInst)
         {
+            printf("DEBUG: Frustum culling - processing instance %d...\n", iInst);
             MeshInstance *pInst = pMeshCaller->m_instances[iInst].getObject<MeshInstance>();
-            if (iInst % 2)
+            printf("DEBUG: Got MeshInstance pointer: %p\n", pInst);
+            
+            if (pMeshCaller->hasAABB())
             {
-                pInst->m_culledOut = false;
-                ++pMeshCaller->m_numVisibleInstances;
+                printf("DEBUG: Mesh has AABB, getting corners...\n");
+                // Get the AABB in world space
+                Vector3 localCorners[8];
+                printf("DEBUG: About to call getAABBCorners...\n");
+                pMeshCaller->getAABBCorners(localCorners);
+                printf("DEBUG: getAABBCorners completed successfully\n");
+                
+                // Transform to world space - get from parent SceneNode
+                Matrix4x4 instanceWorldMatrix;
+                instanceWorldMatrix.loadIdentity();
+                Handle hInstanceParentSN = pInst->getFirstParentByType<SceneNode>();
+                if (hInstanceParentSN.isValid()) {
+                    instanceWorldMatrix = hInstanceParentSN.getObject<SceneNode>()->m_worldTransform;
+                }
+                Vector3 worldCorners[8];
+                for (int i = 0; i < 8; i++) {
+                    worldCorners[i] = instanceWorldMatrix * localCorners[i];
+                }
+                
+                // Find min/max corners
+                Vector3 aabbMin = worldCorners[0];
+                Vector3 aabbMax = worldCorners[0];
+                for (int i = 1; i < 8; i++) {
+                    aabbMin = Vector3(
+                        aabbMin.m_x < worldCorners[i].m_x ? aabbMin.m_x : worldCorners[i].m_x,
+                        aabbMin.m_y < worldCorners[i].m_y ? aabbMin.m_y : worldCorners[i].m_y,
+                        aabbMin.m_z < worldCorners[i].m_z ? aabbMin.m_z : worldCorners[i].m_z
+                    );
+                    aabbMax = Vector3(
+                        aabbMax.m_x > worldCorners[i].m_x ? aabbMax.m_x : worldCorners[i].m_x,
+                        aabbMax.m_y > worldCorners[i].m_y ? aabbMax.m_y : worldCorners[i].m_y,
+                        aabbMax.m_z > worldCorners[i].m_z ? aabbMax.m_z : worldCorners[i].m_z
+                    );
+                }
+                
+                // Test against frustum planes from the draw event (YELLOW FRUSTUM planes)
+                // Strategy: If ANY AABB corner is inside the frustum, show the Imrod
+                bool isInsideFrustum = false;
+                
+                // Test all 8 corners of the AABB
+                for (int corner = 0; corner < 8; corner++)
+                {
+                    Vector3 cornerPos = worldCorners[corner];
+                    bool cornerInside = true;
+                    
+                    // Test this corner against all 6 frustum planes
+                    for (int plane = 0; plane < 6; plane++)
+                    {
+                        if (!pDrawEvent->m_frustumPlanes[plane].isPointInside(cornerPos))
+                        {
+                            cornerInside = false;
+                            break; // This corner is outside, try next corner
+                        }
+                    }
+                    
+                    // If this corner is inside all planes, the AABB is inside
+                    if (cornerInside)
+                    {
+                        isInsideFrustum = true;
+                        break; // Found at least one corner inside, so show the Imrod
+                    }
+                }
+                
+                // Debug output for culling decisions
+                if (strstr(pMeshCaller->getMeshName(), "imrod.x_imrodmesh_mesh.mesha")) {
+                    printf("DEBUG: FRUSTUM CULLING - Imrod instance %d: AABB min(%.2f,%.2f,%.2f) max(%.2f,%.2f,%.2f) -> %s\n",
+                        iInst, aabbMin.m_x, aabbMin.m_y, aabbMin.m_z, aabbMax.m_x, aabbMax.m_y, aabbMax.m_z,
+                        isInsideFrustum ? "INSIDE YELLOW FRUSTUM (any corner inside)" : "OUTSIDE YELLOW FRUSTUM (all corners outside)");
+                    
+                    printf("  -> Using YELLOW FRUSTUM planes: near=1.0, far=50.0\n");
+                    
+                    // Show the actual frustum plane data being used for culling
+                    printf("  -> FRUSTUM PLANE DATA:\n");
+                    const char* planeNames[6] = {"Left", "Right", "Bottom", "Top", "Near", "Far"};
+                    for (int plane = 0; plane < 6; plane++) {
+                        printf("    %s plane: normal(%.3f,%.3f,%.3f) distance=%.3f\n",
+                            planeNames[plane],
+                            pDrawEvent->m_frustumPlanes[plane].normal.m_x,
+                            pDrawEvent->m_frustumPlanes[plane].normal.m_y,
+                            pDrawEvent->m_frustumPlanes[plane].normal.m_z,
+                            pDrawEvent->m_frustumPlanes[plane].distance);
+                    }
+                    
+                    // Show camera position and distance to Imrod center
+                    Vector3 imrodCenter = Vector3(
+                        (aabbMin.m_x + aabbMax.m_x) * 0.5f,
+                        (aabbMin.m_y + aabbMax.m_y) * 0.5f,
+                        (aabbMin.m_z + aabbMax.m_z) * 0.5f
+                    );
+                    
+                    // Get camera position from the draw event (we need to extract it from the projection matrix)
+                    // For now, let's just show the Imrod center position
+                    printf("  -> Imrod center position: (%.2f,%.2f,%.2f)\n", 
+                        imrodCenter.m_x, imrodCenter.m_y, imrodCenter.m_z);
+                    
+                    // Calculate distance from camera to Imrod center
+                    float distanceToImrod = sqrt(imrodCenter.m_x * imrodCenter.m_x + 
+                                               imrodCenter.m_y * imrodCenter.m_y + 
+                                               imrodCenter.m_z * imrodCenter.m_z);
+                    printf("  -> Distance from camera to Imrod: %.2f units\n", distanceToImrod);
+                    printf("  -> Frustum range: %.2f to %.2f units\n", 1.0f, 50.0f);
+                    
+                    // Test with a known point that should be OUTSIDE the frustum (very far away)
+                    Vector3 testPointFar(1000.0f, 1000.0f, 1000.0f);
+                    bool testPointInside = true;
+                    for (int plane = 0; plane < 6; plane++) {
+                        if (!pDrawEvent->m_frustumPlanes[plane].isPointInside(testPointFar)) {
+                            testPointInside = false;
+                            break;
+                        }
+                    }
+                    printf("  -> TEST: Point (1000,1000,1000) should be OUTSIDE -> %s\n", 
+                        testPointInside ? "INSIDE (ERROR!)" : "OUTSIDE (CORRECT)");
+                    
+                    // Test with origin point
+                    Vector3 testPointOrigin(0.0f, 0.0f, 0.0f);
+                    bool testOriginInside = true;
+                    for (int plane = 0; plane < 6; plane++) {
+                        if (!pDrawEvent->m_frustumPlanes[plane].isPointInside(testPointOrigin)) {
+                            testOriginInside = false;
+                            break;
+                        }
+                    }
+                    printf("  -> TEST: Point (0,0,0) -> %s\n", 
+                        testOriginInside ? "INSIDE" : "OUTSIDE");
+                    
+                    // Show which corners are inside/outside
+                    printf("  -> Corner analysis:\n");
+                    for (int corner = 0; corner < 8; corner++) {
+                        Vector3 cornerPos = worldCorners[corner];
+                        bool cornerInside = true;
+                        for (int plane = 0; plane < 6; plane++) {
+                            if (!pDrawEvent->m_frustumPlanes[plane].isPointInside(cornerPos)) {
+                                cornerInside = false;
+                                printf("    Corner %d: (%.2f,%.2f,%.2f) -> OUTSIDE (failed plane %d: normal(%.3f,%.3f,%.3f) distance=%.3f)\n", 
+                                    corner, cornerPos.m_x, cornerPos.m_y, cornerPos.m_z, plane,
+                                    pDrawEvent->m_frustumPlanes[plane].normal.m_x,
+                                    pDrawEvent->m_frustumPlanes[plane].normal.m_y,
+                                    pDrawEvent->m_frustumPlanes[plane].normal.m_z,
+                                    pDrawEvent->m_frustumPlanes[plane].distance);
+                                break;
+                            }
+                        }
+                        if (cornerInside) {
+                            printf("    Corner %d: (%.2f,%.2f,%.2f) -> INSIDE\n", 
+                                corner, cornerPos.m_x, cornerPos.m_y, cornerPos.m_z);
+                        }
+                    }
+                }
+                
+                if (isInsideFrustum)
+                {
+                    pInst->m_culledOut = false;
+                    ++pMeshCaller->m_numVisibleInstances;
+                }
+                else
+                {
+                    pInst->m_culledOut = true;
+                }
             }
             else
             {
-                pInst->m_culledOut = true;
+                // No AABB - render everything
+                pInst->m_culledOut = false;
+                ++pMeshCaller->m_numVisibleInstances;
             }
         }
+    }
+    else
+    {
+        printf("DEBUG: FRUSTUM CULLING SKIPPED for mesh '%s' - pDrawEvent is NULL (Z-only draw call)\n", 
+            pMeshCaller->getMeshName());
     }
     
 
@@ -269,6 +481,310 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 	
 	projectionViewWorldMatrix = projectionViewWorldMatrix * worldMatrix;
 
+#ifdef _DEBUG
+	// Add AABB debug rendering ONLY for imrod mesh + test line
+	if (pMeshCaller->hasAABB() && strstr(pMeshCaller->getMeshName(), "imrod.x_imrodmesh_mesh.mesha")) 
+	{
+		// DISABLED: Debug output to verify this is being called
+		/*
+		printf("DEBUG: Rendering AABB for SPECIFIC mesh '%s' [%p] with %d instances\n", pMeshCaller->getMeshName(), pMeshCaller, pMeshCaller->m_instances.m_size);
+		printf("  -> DrawEvent type: %s\n", pDrawEvent ? "GATHER_DRAWCALLS" : "GATHER_DRAWCALLS_Z_ONLY");
+		*/
+		
+		// Get the DebugRenderer instance
+		PE::Components::DebugRenderer* pDebugRenderer = PE::Components::DebugRenderer::Instance();
+		if (pDebugRenderer)
+		{
+			// DISABLED: Debug output
+			/*
+			printf("  -> DebugRenderer found, creating AABB lines for imrod mesh...\n");
+			*/
+			
+			// DISABLED: FIRST: Create a simple test line to verify debug lines work at all
+			/*
+			Vector3 testLineData[4]; // 2 points * 2 (position + color)
+			testLineData[0] = Vector3(0.0f, 0.0f, 0.0f);  // start position
+			testLineData[1] = Vector3(1.0f, 0.0f, 0.0f);  // red color
+			testLineData[2] = Vector3(10.0f, 0.0f, 0.0f); // end position  
+			testLineData[3] = Vector3(1.0f, 0.0f, 0.0f);  // red color
+			
+			Matrix4x4 testTransform;
+			testTransform.loadIdentity();
+			testTransform.setPos(Vector3(0.0f, 5.0f, 0.0f)); // 5 units above origin
+			
+			pDebugRenderer->createLineMesh(
+				true, 
+				testTransform, 
+				&testLineData[0].m_x, 
+				2, // 2 points
+				0.1f,  // 0.1 second lifetime (refreshes every frame)
+				1.0f
+			);
+			printf("  -> TEST LINE created at (0,5,0) to (10,5,0) - RED color\n");
+			*/
+
+			// DISABLED: TEST: Create a line at the EXACT world position of the first imrod instance
+			// This will test if local-to-world transformation is working
+			/*
+			if (pMeshCaller->m_instances.m_size > 0)
+			{
+				MeshInstance *pFirstInst = pMeshCaller->m_instances[0].getObject<MeshInstance>();
+				Handle hInstanceParentSN = pFirstInst->getFirstParentByType<SceneNode>();
+				if (hInstanceParentSN.isValid())
+				{
+					Matrix4x4 instanceWorldMatrix = hInstanceParentSN.getObject<SceneNode>()->m_worldTransform;
+					Vector3 worldPos = instanceWorldMatrix.getPos();
+					
+					// Create a test line at the EXACT world position of the imrod
+					Vector3 worldTestLineData[4]; // 2 points * 2 (position + color)
+					worldTestLineData[0] = Vector3(0.0f, 0.0f, 0.0f);  // local start (will be transformed)
+					worldTestLineData[1] = Vector3(0.0f, 1.0f, 0.0f);  // cyan color
+					worldTestLineData[2] = Vector3(2.0f, 0.0f, 0.0f);  // local end (will be transformed)
+					worldTestLineData[3] = Vector3(0.0f, 1.0f, 0.0f);  // cyan color
+					
+					pDebugRenderer->createLineMesh(
+						true, 
+						instanceWorldMatrix,  // Use the SAME world matrix as the imrod
+						&worldTestLineData[0].m_x, 
+						2, // 2 points
+						0.1f,  // 0.1 second lifetime (refreshes every frame)
+						1.0f
+					);
+					printf("  -> WORLD TEST LINE created at imrod world pos (%.2f, %.2f, %.2f) - CYAN color\n", 
+						worldPos.m_x, worldPos.m_y, worldPos.m_z);
+					
+					// Also create a line WITHOUT transformation to compare
+					Vector3 noTransformLineData[4]; // 2 points * 2 (position + color)
+					noTransformLineData[0] = worldPos;  // start at world position
+					noTransformLineData[1] = Vector3(1.0f, 1.0f, 0.0f);  // yellow color
+					noTransformLineData[2] = worldPos + Vector3(2.0f, 0.0f, 0.0f);  // end at world position + offset
+					noTransformLineData[3] = Vector3(1.0f, 1.0f, 0.0f);  // yellow color
+					
+					Matrix4x4 identityTransform;
+					identityTransform.loadIdentity();
+					
+					pDebugRenderer->createLineMesh(
+						true, 
+						identityTransform,  // No transformation
+						&noTransformLineData[0].m_x, 
+						2, // 2 points
+						0.1f,  // 0.1 second lifetime (refreshes every frame)
+						1.0f
+					);
+					printf("  -> NO-TRANSFORM TEST LINE created at world pos (%.2f, %.2f, %.2f) - YELLOW color\n", 
+						worldPos.m_x, worldPos.m_y, worldPos.m_z);
+					
+					// TEST: Create a simple box at imrod position to test box rendering
+					Vector3 simpleBoxData[48]; // 12 lines * 4 values per line
+					Vector3 boxColor(0.0f, 1.0f, 1.0f); // CYAN color for simple box
+					
+					// Create a simple 2x2x2 box centered at origin
+					Vector3 boxMin(-1.0f, -1.0f, -1.0f);
+					Vector3 boxMax(1.0f, 1.0f, 1.0f);
+					
+					// Define 8 corners of the simple box
+					Vector3 boxCorners[8] = {
+						Vector3(boxMin.m_x, boxMin.m_y, boxMin.m_z), // 0
+						Vector3(boxMax.m_x, boxMin.m_y, boxMin.m_z), // 1
+						Vector3(boxMax.m_x, boxMax.m_y, boxMin.m_z), // 2
+						Vector3(boxMin.m_x, boxMax.m_y, boxMin.m_z), // 3
+						Vector3(boxMin.m_x, boxMin.m_y, boxMax.m_z), // 4
+						Vector3(boxMax.m_x, boxMin.m_y, boxMax.m_z), // 5
+						Vector3(boxMax.m_x, boxMax.m_y, boxMax.m_z), // 6
+						Vector3(boxMin.m_x, boxMax.m_y, boxMax.m_z)  // 7
+					};
+					
+					// Define 12 lines for the box wireframe
+					int boxLineIndices[12][2] = {
+						{0,1}, {1,2}, {2,3}, {3,0}, // bottom face
+						{4,5}, {5,6}, {6,7}, {7,4}, // top face
+						{0,4}, {1,5}, {2,6}, {3,7}  // vertical edges
+					};
+					
+					int boxPointIndex = 0;
+					for (int k = 0; k < 12; k++) {
+						Vector3 start = boxCorners[boxLineIndices[k][0]];
+						Vector3 end = boxCorners[boxLineIndices[k][1]];
+						
+						simpleBoxData[boxPointIndex++] = start;  // position
+						simpleBoxData[boxPointIndex++] = boxColor;  // color
+						simpleBoxData[boxPointIndex++] = end;    // position
+						simpleBoxData[boxPointIndex++] = boxColor;  // color
+					}
+					
+					pDebugRenderer->createLineMesh(
+						true, 
+						instanceWorldMatrix,  // Use the SAME world matrix as the imrod
+						&simpleBoxData[0].m_x, 
+						boxPointIndex, 
+						0.1f,  // 0.1 second lifetime (refreshes every frame)
+						1.0f
+					);
+					printf("  -> SIMPLE BOX created at imrod world pos (%.2f, %.2f, %.2f) - CYAN color\n", 
+						worldPos.m_x, worldPos.m_y, worldPos.m_z);
+				}
+			}
+			*/
+			
+			// SECOND: Create AABB debug lines for imrod mesh instances
+			// Get the active camera for frustum culling
+			PE::Components::Camera* pActiveCamera = PE::Components::CameraManager::Instance()->getActiveCamera();
+			PE::Components::CameraSceneNode* pCamSceneNode = nullptr;
+			if (pActiveCamera)
+			{
+				pCamSceneNode = pActiveCamera->getCamSceneNode();
+			}
+			
+			printf("DEBUG: About to process %d Imrod instances for AABB rendering...\n", pMeshCaller->m_instances.m_size);
+			for (int iInst = 0; iInst < pMeshCaller->m_instances.m_size; iInst++)
+			{
+				printf("DEBUG: Processing Imrod instance %d...\n", iInst);
+				MeshInstance *pInst = pMeshCaller->m_instances[iInst].getObject<MeshInstance>();
+				if (pInst->m_culledOut)
+				{
+					printf("DEBUG: Instance %d is culled, skipping...\n", iInst);
+					continue;
+				}
+				
+				// Get the world transform for THIS specific instance
+				printf("DEBUG: Getting parent SceneNode for instance %d...\n", iInst);
+				Handle hInstanceParentSN = pInst->getFirstParentByType<SceneNode>();
+				if (!hInstanceParentSN.isValid())
+				{
+					printf("DEBUG: No SceneNode parent, checking for SkeletonInstance...\n");
+					// allow skeleton to be in chain
+					SkeletonInstance *pParentSkelInstance = pInst->getFirstParentByTypePtr<SkeletonInstance>();
+					if (pParentSkelInstance)
+					{
+						printf("DEBUG: Found SkeletonInstance parent, getting its SceneNode...\n");
+						hInstanceParentSN = pParentSkelInstance->getFirstParentByType<SceneNode>();
+					}
+				}
+				
+				if (hInstanceParentSN.isValid())
+				{
+					Matrix4x4 instanceWorldMatrix = hInstanceParentSN.getObject<SceneNode>()->m_worldTransform;
+					
+					printf("  -> Imrod Instance %d world position: (%.2f, %.2f, %.2f)\n", iInst,
+						instanceWorldMatrix.getPos().m_x, instanceWorldMatrix.getPos().m_y, instanceWorldMatrix.getPos().m_z);
+					
+					// Create AABB debug lines using the Mesh's AABB data
+					Vector3 lineData[48]; // 24 points * 2 (position + color)
+					
+					// Create debug lines from the AABB data
+					const PE::AABB& aabb = pMeshCaller->getLocalAABB();
+					Vector3 min = aabb.min();
+					Vector3 max = aabb.max();
+					
+					printf("  -> AABB LOCAL data: min(%.2f,%.2f,%.2f) max(%.2f,%.2f,%.2f) center(%.2f,%.2f,%.2f) extents(%.2f,%.2f,%.2f)\n",
+						min.m_x, min.m_y, min.m_z, max.m_x, max.m_y, max.m_z,
+						aabb.center.m_x, aabb.center.m_y, aabb.center.m_z,
+						aabb.extents.m_x, aabb.extents.m_y, aabb.extents.m_z);
+					
+					// Define the 8 corners of the AABB in LOCAL space
+					Vector3 localCorners[8] = {
+						Vector3(min.m_x, min.m_y, min.m_z), // 0: min corner
+						Vector3(max.m_x, min.m_y, min.m_z), // 1: min corner + x
+						Vector3(max.m_x, max.m_y, min.m_z), // 2: min corner + x + y
+						Vector3(min.m_x, max.m_y, min.m_z), // 3: min corner + y
+						Vector3(min.m_x, min.m_y, max.m_z), // 4: min corner + z
+						Vector3(max.m_x, min.m_y, max.m_z), // 5: min corner + x + z
+						Vector3(max.m_x, max.m_y, max.m_z), // 6: max corner
+						Vector3(min.m_x, max.m_y, max.m_z)  // 7: min corner + y + z
+					};
+					
+					// Transform corners to WORLD space using the instance's world matrix
+					Vector3 worldCorners[8];
+					for (int i = 0; i < 8; i++) {
+						worldCorners[i] = instanceWorldMatrix * localCorners[i];  // Use operator * instead of transform()
+					}
+					
+					printf("  -> AABB WORLD corners: [0](%.2f,%.2f,%.2f) [6](%.2f,%.2f,%.2f)\n",
+						worldCorners[0].m_x, worldCorners[0].m_y, worldCorners[0].m_z,
+						worldCorners[6].m_x, worldCorners[6].m_y, worldCorners[6].m_z);
+					
+					// Test frustum culling
+					bool isInsideFrustum = true;
+					if (pCamSceneNode)
+					{
+						Vector3 aabbMin = worldCorners[0]; // min corner
+						Vector3 aabbMax = worldCorners[6]; // max corner
+						isInsideFrustum = pCamSceneNode->isAABBInsideFrustum(aabbMin, aabbMax);
+						printf("  -> Frustum culling: AABB is %s the camera frustum\n", 
+							isInsideFrustum ? "INSIDE" : "OUTSIDE");
+					}
+					else
+					{
+						printf("  -> Frustum culling: No camera available\n");
+					}
+
+					// Define the 12 lines (each line connects 2 corners)
+					int lineIndices[12][2] = {
+						{0,1}, {1,2}, {2,3}, {3,0}, // bottom face
+						{4,5}, {5,6}, {6,7}, {7,4}, // top face
+						{0,4}, {1,5}, {2,6}, {3,7}  // vertical edges
+					};
+
+					// Debug color (bright magenta for AABB to distinguish from coordinate axes)
+					Vector3 color(1.0f, 0.0f, 1.0f);  // MAGENTA color
+
+					int pointIndex = 0;
+					for (int k = 0; k < 12; k++) {
+						Vector3 start = worldCorners[lineIndices[k][0]];  // Use WORLD corners
+						Vector3 end = worldCorners[lineIndices[k][1]];    // Use WORLD corners
+						
+						// Each line segment: [position, color] pair
+						lineData[pointIndex++] = start;  // position
+						lineData[pointIndex++] = color;  // color
+						lineData[pointIndex++] = end;    // position
+						lineData[pointIndex++] = color;  // color
+					}
+					
+					// Create the AABB lines WITHOUT additional transformation since we already transformed to world space
+					Matrix4x4 identityMatrix;
+					identityMatrix.loadIdentity();
+					
+					pDebugRenderer->createLineMesh(
+						true, 
+						identityMatrix,  // Use identity matrix since corners are already in world space
+						&lineData[0].m_x, 
+						pointIndex, 
+						0.1f,  // Set lifetime to 0.1 seconds (very short, refreshes every frame)
+						1.0f
+					);
+					printf("  -> Imrod AABB lines created for instance %d! (world pos: %.2f, %.2f, %.2f)\n", 
+						iInst, instanceWorldMatrix.getPos().m_x, instanceWorldMatrix.getPos().m_y, instanceWorldMatrix.getPos().m_z);
+				}
+				else
+				{
+					printf("  -> WARNING: Imrod Instance %d has no valid parent SceneNode\n", iInst);
+				}
+			}
+		}
+		else
+		{
+			printf("  -> ERROR: DebugRenderer not found for mesh '%s' [%p]!\n", pMeshCaller->getMeshName(), pMeshCaller);
+		}
+	}
+	else if (pMeshCaller->hasAABB())
+	{
+		printf("DEBUG: Skipping AABB rendering for mesh '%s' [%p] - not imrod mesh\n", pMeshCaller->getMeshName(), pMeshCaller);
+	}
+	else
+	{
+		printf("DEBUG: Skipping AABB rendering for mesh '%s' [%p] - mesh has no AABB data\n", pMeshCaller->getMeshName(), pMeshCaller);
+	}
+#endif
+
+#ifdef _DEBUG
+	// DISABLED: Summary of mesh processing
+	/*
+	printf("DEBUG: Finished processing mesh '%s' [%p] - %d instances, AABB rendered: %s\n", 
+		pMeshCaller->getMeshName(), pMeshCaller, pMeshCaller->m_instances.m_size, 
+		pMeshCaller->hasAABB() ? "YES" : "NO");
+	*/
+#endif
+
 	// draw all pixel ranges with different materials
 	PrimitiveTypes::UInt32 numRanges = MeshHelpers::getNumberOfRangeCalls(pibGPU);
 	
@@ -276,12 +792,17 @@ void SingleHandler_DRAW::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 	{
 		gatherDrawCallsForRange(pMeshCaller, pDrawList, &hVertexBuffersGPU[0], numVBufs, vbufWeights, iRange, pDrawEvent, pZOnlyDrawEvent);
 	}
+	
+	printf("DEBUG: Successfully completed processing for mesh '%s' with %d instances\n", meshName, instanceCount);
 }
 
 void SingleHandler_DRAW::gatherDrawCallsForRange(Mesh *pMeshCaller, DrawList *pDrawList,  PE::Handle *pHVBs, int vbCount, Vector4 &vbWeights, 
 		int iRange,
 		Events::Event_GATHER_DRAWCALLS *pDrawEvent, Events::Event_GATHER_DRAWCALLS_Z_ONLY *pZOnlyDrawEvent)
 {
+	printf("DEBUG: gatherDrawCallsForRange called for mesh '%s', range %d\n", pMeshCaller->getMeshName(), iRange);
+	printf("DEBUG: Mesh has %d instances, %d visible instances\n", pMeshCaller->m_instances.m_size, pMeshCaller->m_numVisibleInstances);
+	
 	// we might have several passes (several effects) so we need to check which effect list to use
 	PEStaticVector<PE::Handle, 4> *pEffectsForRange = NULL;
 	bool haveInstancesAndInstanceEffect = false;
@@ -455,8 +976,22 @@ void SingleHandler_DRAW::gatherDrawCallsForRange(Mesh *pMeshCaller, DrawList *pD
 				}
 
                 iSrcInstanceInBoneSegment = iSrcInstance; // reset instance id for each bone segment since we want to process same instances
-                while(pMeshCaller->m_instances[iSrcInstanceInBoneSegment].getObject<MeshInstance>()->m_culledOut)
+                printf("DEBUG: Starting culled instance loop: iSrcInstanceInBoneSegment=%d, instances.m_size=%d\n", 
+                    iSrcInstanceInBoneSegment, pMeshCaller->m_instances.m_size);
+                while(iSrcInstanceInBoneSegment < pMeshCaller->m_instances.m_size && 
+                      pMeshCaller->m_instances[iSrcInstanceInBoneSegment].getObject<MeshInstance>()->m_culledOut)
+                {
+                    printf("DEBUG: Instance %d is culled, incrementing...\n", iSrcInstanceInBoneSegment);
                     ++iSrcInstanceInBoneSegment;
+                }
+                printf("DEBUG: Culled instance loop ended: iSrcInstanceInBoneSegment=%d\n", iSrcInstanceInBoneSegment);
+                
+                // Check if all instances are culled - if so, skip this render group
+                if (iSrcInstanceInBoneSegment >= pMeshCaller->m_instances.m_size)
+                {
+                    printf("DEBUG: All instances are culled, skipping render group %d\n", iRenderGroup);
+                    continue; // Skip this render group
+                }
                 
 				pDrawList->beginDrawCallRecord(curMat.m_dbgName);
 

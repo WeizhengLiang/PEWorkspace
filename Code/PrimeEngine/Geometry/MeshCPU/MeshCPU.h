@@ -25,6 +25,13 @@
 
 namespace PE {
 
+	struct AABB {
+		Vector3 center;
+		Vector3 extents;
+		Vector3 min() const { return center - extents; }
+		Vector3 max() const { return center + extents; }
+	};
+
 // This class is a simple POD struct that holds all the CPU information about the mesh before it is given to DX to be put in GPU memory
 struct MeshCPU : PE::PEAllocatableAndDefragmentable
 {
@@ -71,6 +78,24 @@ struct MeshCPU : PE::PEAllocatableAndDefragmentable
 	PrimitiveTypes::Bool m_manualBufferManagement; // if true, this mesh wont be cached and reused
 
 	PE::MemoryArena m_arena; PE::GameContext *m_pContext;
+
+public:
+	// read-only access + two builders for local AABB
+	const AABB& localAABB() const { return m_localAABB; }
+	bool hasAABB() const { return m_aabbValid; }
+
+	// Generic AABB builder (row pointer + count)
+	void buildLocalAABBFromPositions(const Vector3* positions, size_t count);
+
+	// pull from MeshCPU's own position buffer
+	void buildLocalAABBFromMeshBuffer();
+
+	// Debug visualization
+	void createAABBDebugLines(Vector3* lineData, int& lineCount) const;
+
+private:
+	AABB m_localAABB;
+	bool m_aabbValid{ false };
 };
 
 }; // namespace PE {

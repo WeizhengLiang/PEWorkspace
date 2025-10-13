@@ -16,6 +16,7 @@
 #include "PrimeEngine/Geometry/SkeletonCPU/SkeletonCPU.h"
 
 #include "PrimeEngine/Scene/RootSceneNode.h"
+#include "PrimeEngine/Scene/DebugRenderer.h"
 
 #include "Light.h"
 
@@ -63,10 +64,31 @@ PE::Handle MeshManager::getAsset(const char *asset, const char *package, int &th
 	{
 		MeshCPU mcpu(*m_pContext, m_arena);
 		mcpu.ReadMesh(asset, package, "");
+
+		// Build AABB if needed (always build, not just in debug)
+		if (!mcpu.hasAABB()) {
+			mcpu.buildLocalAABBFromMeshBuffer();
+		}
+
+#ifdef _DEBUG
+		// Debug output
+		printf("MESHMANAGER: Loading mesh %s: AABB valid = %s\n", asset, mcpu.hasAABB() ? "true" : "false");
+		if (mcpu.hasAABB()) {
+			const AABB& aabb = mcpu.localAABB();
+			printf("  -> AABB center: (%.2f, %.2f, %.2f), extents: (%.2f, %.2f, %.2f)\n", 
+				aabb.center.m_x, aabb.center.m_y, aabb.center.m_z,
+				aabb.extents.m_x, aabb.extents.m_y, aabb.extents.m_z);
+		} else {
+			printf("  -> WARNING: No AABB data for mesh %s\n", asset);
+		}
+#endif
 		
 		PE::Handle hMesh("Mesh", sizeof(Mesh));
 		Mesh *pMesh = new(hMesh) Mesh(*m_pContext, m_arena, hMesh);
 		pMesh->addDefaultComponents();
+		
+		// Set mesh name for debugging
+		pMesh->setMeshName(asset);
 
 		pMesh->loadFromMeshCPU_needsRC(mcpu, threadOwnershipMask);
 

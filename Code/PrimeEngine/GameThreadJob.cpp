@@ -198,6 +198,66 @@ int ClientGame::runGameFrame()
                 drawEvt->m_parentWorldTransform.loadIdentity();
                 drawEvt->m_viewInvTransform = pcam->m_worldToViewTransform.inverse();
                 
+                // Copy frustum planes from camera for culling
+                // NOTE: The camera's m_frustumPlanes are computed using yellow frustum parameters (5.0, 6.0)
+                // in computeFrustumPlanes(), so these are already the correct culling planes
+                printf("DEBUG: Camera type: %s\n", pcam->getClassName());
+                printf("DEBUG: Camera pointer: %p\n", pcam);
+                
+                // The camera IS a CameraSceneNode, not a component of it
+                CameraSceneNode* pCamSceneNode = static_cast<CameraSceneNode*>(pcam);
+                printf("DEBUG: CameraSceneNode pointer: %p\n", pCamSceneNode);
+                
+                if (pCamSceneNode) {
+                    printf("DEBUG: CameraSceneNode found, checking source frustum planes:\n");
+                    const char* planeNames[6] = {"Left", "Right", "Bottom", "Top", "Near", "Far"};
+                    
+                    // Check if m_frustumPlanes is properly initialized
+                    printf("DEBUG: Checking m_frustumPlanes array...\n");
+                    
+                    // Try to access just the first plane to see if it crashes
+                    printf("DEBUG: Testing first plane access...\n");
+                    printf("  SOURCE Left: normal(%.3f,%.3f,%.3f) distance=%.3f\n",
+                        pCamSceneNode->m_frustumPlanes[0].normal.m_x,
+                        pCamSceneNode->m_frustumPlanes[0].normal.m_y,
+                        pCamSceneNode->m_frustumPlanes[0].normal.m_z,
+                        pCamSceneNode->m_frustumPlanes[0].distance);
+                    
+                    printf("DEBUG: First plane access successful, continuing...\n");
+                    for (int i = 1; i < 6; i++) {
+                        printf("DEBUG: Accessing plane %d...\n", i);
+                        printf("  SOURCE %s: normal(%.3f,%.3f,%.3f) distance=%.3f\n",
+                            planeNames[i],
+                            pCamSceneNode->m_frustumPlanes[i].normal.m_x,
+                            pCamSceneNode->m_frustumPlanes[i].normal.m_y,
+                            pCamSceneNode->m_frustumPlanes[i].normal.m_z,
+                            pCamSceneNode->m_frustumPlanes[i].distance);
+                    }
+                    
+                    printf("DEBUG: About to copy frustum planes...\n");
+                    for (int i = 0; i < 6; i++) {
+                        printf("DEBUG: Copying plane %d...\n", i);
+                        drawEvt->m_frustumPlanes[i] = Event_GATHER_DRAWCALLS::FrustumPlane(
+                            pCamSceneNode->m_frustumPlanes[i].normal,
+                            pCamSceneNode->m_frustumPlanes[i].distance
+                        );
+                    }
+                    printf("DEBUG: Copied YELLOW FRUSTUM planes to draw event for culling\n");
+                    
+                    // Show all 6 planes to verify they're not all zeros
+                    printf("DEBUG: COPIED frustum planes:\n");
+                    for (int i = 0; i < 6; i++) {
+                        printf("  COPIED %s: normal(%.3f,%.3f,%.3f) distance=%.3f\n",
+                            planeNames[i],
+                            drawEvt->m_frustumPlanes[i].normal.m_x,
+                            drawEvt->m_frustumPlanes[i].normal.m_y,
+                            drawEvt->m_frustumPlanes[i].normal.m_z,
+                            drawEvt->m_frustumPlanes[i].distance);
+                    }
+                } else {
+                    printf("ERROR: CameraSceneNode not found! Cannot copy frustum planes.\n");
+                }
+                
 				//Commented out by Mac because I'm pretty sure this does nothing but am afraid to delete it...
 				static bool setCameraAsLightSource = false;
 				RootSceneNode *pRoot = RootSceneNode::Instance();
@@ -356,8 +416,66 @@ int ClientGame::runGameFrame()
 				//debug draw root and grid
 				DebugRenderer::Instance()->createRootLineMesh();// send event while the array is on the stack
 
+				// TEST: Create a simple debug line to verify the system works
+				Vector3 testLineData[4]; // 2 points * 2 (position + color)
+				testLineData[0] = Vector3(0.0f, 0.0f, 0.0f);  // start position
+				testLineData[1] = Vector3(0.0f, 1.0f, 0.0f);  // green color
+				testLineData[2] = Vector3(5.0f, 0.0f, 0.0f);  // end position  
+				testLineData[3] = Vector3(0.0f, 1.0f, 0.0f);  // green color
+				
+				Matrix4x4 testTransform;
+				testTransform.loadIdentity();
+				testTransform.setPos(Vector3(0.0f, 10.0f, 0.0f)); // 10 units above origin
+				
+				DebugRenderer::Instance()->createLineMesh(
+					true, 
+					testTransform, 
+					&testLineData[0].m_x, 
+					2, // 2 points
+					60.0f,  // 60 second lifetime
+					1.0f
+				);
+				printf("DEBUG: Created TEST LINE at (0,10,0) to (5,10,0) - GREEN color\n");
+
+				// TEST: Create a purple line from origin at 45 degrees between x and y axes
+				Vector3 purpleLineData[4]; // 2 points * 2 (position + color)
+				purpleLineData[0] = Vector3(0.0f, 0.0f, 0.0f);  // start at origin
+				purpleLineData[1] = Vector3(1.0f, 0.0f, 1.0f);  // purple color (red + blue)
+				purpleLineData[2] = Vector3(5.0f, 5.0f, 0.0f);  // end at 45 degrees (equal x and y)
+				purpleLineData[3] = Vector3(1.0f, 0.0f, 1.0f);  // purple color (red + blue)
+				
+				Matrix4x4 purpleTransform;
+				purpleTransform.loadIdentity();
+				// No translation needed - line starts from origin
+				
+				DebugRenderer::Instance()->createLineMesh(
+					true, 
+					purpleTransform, 
+					&purpleLineData[0].m_x, 
+					2, // 2 points
+					60.0f,  // 60 second lifetime
+					1.0f
+				);
+				printf("DEBUG: Created PURPLE LINE from origin (0,0,0) to (5,5,0) - 45 degree angle\n");
+
 				// call this to potentially generate meshes that were scheduled in debug draw of lines
+				printf("DEBUG: About to call DebugRenderer::postPreDraw\n");
+				
+				// Add a simple test line to verify debug rendering works
+				PE::Components::DebugRenderer* pDebugRenderer = PE::Components::DebugRenderer::Instance();
+				if (pDebugRenderer) {
+					Vector3 testLine[4] = {
+						Vector3(0.0f, 0.0f, 0.0f), Vector3(1.0f, 0.0f, 0.0f), // Red
+						Vector3(5.0f, 0.0f, 0.0f), Vector3(1.0f, 0.0f, 0.0f)  // Red
+					};
+					Matrix4x4 identity;
+					identity.loadIdentity();
+					printf("DEBUG: Creating simple test line in GameThreadJob\n");
+					pDebugRenderer->createLineMesh(true, identity, &testLine[0].m_x, 2, 10.0f, 1.0f);
+				}
+				
 				DebugRenderer::Instance()->postPreDraw(m_pContext->m_gameThreadThreadOwnershipMask);
+				printf("DEBUG: Finished calling DebugRenderer::postPreDraw\n");
 
                 PE::IRenderer::checkForErrors("");
 
