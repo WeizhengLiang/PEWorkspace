@@ -8,10 +8,8 @@ function fillMetaInfoTable(args) -- the script fromat requires existance of this
 args['myScript']="WayPoint.lua"
 args['myScriptPackage']="CharacterControl"
 
-local randWayPoints = {'2', '1', '4', '5'}
-
 args['name'] = '3'
-args['next'] = randWayPoints[math.random(#randWayPoints)]
+args['next'] = '2, 1, 4, 5'
 
 
 end -- required
