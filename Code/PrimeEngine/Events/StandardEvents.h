@@ -74,12 +74,12 @@ struct Event_GATHER_DRAWCALLS : public Event {
 		
 		bool isPointInside(const Vector3& point) {
 			float dotProduct = normal.dotProduct(point);
-			return (dotProduct + distance) >= 0.0f;
+			return (dotProduct + distance) <= 0.0f;  // Inside if negative for this engine
 		}
 		
 		bool isSphereInside(const Vector3& center, float radius) {
 			float dotProduct = normal.dotProduct(center);
-			return (dotProduct + distance) >= -radius;
+			return (dotProduct + distance) <= radius;  // Inside if within radius margin
 		}
 	};
 	FrustumPlane m_frustumPlanes[6]; // Left, Right, Bottom, Top, Near, Far
