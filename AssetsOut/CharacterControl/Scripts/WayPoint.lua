@@ -14,9 +14,14 @@ function runScript(args)
     
     outputDebugString("PE: Progress: about to call root.CharacterControl.Events.Event_CREATE_WAYPOINT.Construct\n")
 
+    local needToRunToThisWayPoint = 0
+    if args['needToRunToThisWayPoint'] ~= nil then
+        needToRunToThisWayPoint = args['needToRunToThisWayPoint']
+    end
     evt = root.CharacterControl.Events.Event_CREATE_WAYPOINT.Construct(
         args['name'],
         args['next'],
+        needToRunToThisWayPoint,
         pos[1], pos[2], pos[3],
         u[1], u[2], u[3],
         v[1], v[2], v[3],

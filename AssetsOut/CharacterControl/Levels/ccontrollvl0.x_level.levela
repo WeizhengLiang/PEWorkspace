@@ -18,7 +18,7 @@ LevelLoader.CreateGameObject("PEObject33_Tstreetlight",1.0, 0.0, -0.0, 0.0, 0.0,
 
 LevelLoader.CreateGameObject("PEObject26_transf",0.0, 0.0, 1.0, 0.0, 0.0, 1.0, -0.0, 0.0, -1.0, -0.0, 0.0, 0.0, -359.967507, -52.751, -1294.534906, 1.0, 'ccontrollvl0.x_PEObject26_trans.lua', 'CharacterControl',0xd0eae8a1, 0x1c6711e0, 0xad47001b, 0x213b583a)
 
-LevelLoader.CreateGameObject("PEObject47_tArrow",-0.380804, 0.0, -0.924656, 0.0, -0.0, 1.0, -0.0, 0.0, 0.924656, 0.0, -0.380804, 0.0, 29.904672, 0.0, 429.092633, 1.0, 'ccontrollvl0.x_PEObject47_tArro.lua', 'CharacterControl',0xd7e2d3c0, 0x91aa11f0, 0x9464f43b, 0xd8263289)
+LevelLoader.CreateGameObject("PEObject50_tArrow",0.024957, 0.0, -0.999689, 0.0, -0.0, 1.0, -0.0, 0.0, 0.999689, 0.0, 0.024957, 0.0, -101.936076, 0.0, 107.188923, 1.0, 'ccontrollvl0.x_PEObject50_tArro.lua', 'CharacterControl',0xaa14d411, 0x91e711f0, 0xb575f43b, 0xd8263289)
 
 LevelLoader.CreateGameObject("PEObject16_tArrow",0.875067, 0.0, 0.484002, 0.0, 0.0, 1.0, -0.0, 0.0, -0.484002, -0.0, 0.875067, 0.0, 770.349103, 0.0, 305.266656, 1.0, 'ccontrollvl0.x_PEObject16_tArro.lua', 'CharacterControl',0x76f9d530, 0x1c5411e0, 0xbea5001b, 0x213b583a)
 
