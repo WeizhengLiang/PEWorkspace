@@ -1,0 +1,14 @@
+LevelLoader.CreateGameObject("PEObject1_pCar",0.870775, 0.0, -0.491682, 0.0, -0.0, 1.0, -0.0, 0.0, 0.491682, 0.0, 0.870775, 0.0, 488.549712, 0.0, -0.0, 1.0, 'TutorialLevel_0.x_PEObject1_pCar.lua', 'ExportTutorial',0x3f246411, 0x8db211f0, 0xb312f43b, 0xd8263289)
+
+LevelLoader.CreateGameObject("PEObject2_pCar",0.897534, 0.0, 0.440945, 0.0, 0.0, 1.0, -0.0, 0.0, -0.440945, -0.0, 0.897534, 0.0, -388.334176, 0.0, -0.0, 1.0, 'TutorialLevel_0.x_PEObject2_pCar.lua', 'ExportTutorial',0x4d62536e, 0x8db211f0, 0xa950f43b, 0xd8263289)
+
+LevelLoader.CreateGameObject("PEObject6_Tstreetlight",1.0, 0.0, -0.0, 0.0, 0.0, 1.0, -0.0, 0.0, -0.0, -0.0, 1.0, 0.0, -283.014455, 0.0, -831.877276, 1.0, 'TutorialLevel_0.x_PEObject6_Tstree.lua', 'ExportTutorial',0x9300f640, 0x90cb11f0, 0x8374f43b, 0xd8263289)
+
+LevelLoader.CreateGameObject("PEObject3_pkingTiger",-0.999658, -0.0, 0.02617, 0.0, 0.0, 1.0, 0.0, 0.0, -0.02617, -0.0, -0.999658, 0.0, -0.0, 0.0, 508.070137, 1.0, 'TutorialLevel_0.x_PEObject3_pkingT.lua', 'ExportTutorial',0x5d333ee1, 0x8db211f0, 0x999cf43b, 0xd8263289)
+
+LevelLoader.CreateGameObject("PEObject10_nazi_rep",1.0, 0.0, -0.0, 0.0, 0.0, 1.0, -0.0, 0.0, -0.0, -0.0, 1.0, 0.0, -459.674594, 0.0, -994.839044, 1.0, 'TutorialLevel_0.x_PEObject10_nazi_.lua', 'ExportTutorial',0x3f392680, 0x90d111f0, 0x9f0df43b, 0xd8263289)
+
+LevelLoader.CreateGameObject("PEObject0_pPlane1",1.0, 0.0, -0.0, 0.0, 0.0, 1.0, -0.0, 0.0, -0.0, -0.0, 1.0, 0.0, -8.326546, 0.0, -4.034357, 1.0, 'TutorialLevel_0.x_PEObject0_pPlane.lua', 'ExportTutorial',0x3956f29e, 0x8db211f0, 0x8ceff43b, 0xd8263289)
+
+LevelLoader.CreateGameObject("PEObject9_TImrod",-0.845981, 0.0, 0.533214, 0.0, 0.0, 1.0, -0.0, 0.0, -0.533214, -0.0, -0.845981, 0.0, 0.0, 0.0, -1005.667701, 1.0, 'TutorialLevel_0.x_PEObject9_TImrod.lua', 'ExportTutorial',0x0772b280, 0x90d011f0, 0xa47ef43b, 0xd8263289)
+

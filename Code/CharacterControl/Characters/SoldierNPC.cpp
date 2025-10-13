@@ -56,12 +56,7 @@ SoldierNPC::SoldierNPC(PE::GameContext &context, PE::MemoryArena arena, PE::Hand
 	SceneNode *pMainSN = new(hSN) SceneNode(*m_pContext, m_arena, hSN);
 	pMainSN->addDefaultComponents();
 
-	// offset the soldier position a bit for assignment 1 requirements
-	float kSpawnYOffset = 200.0f;
-	Vector3 temp_pos = pEvt->m_pos;
-	temp_pos.m_y += kSpawnYOffset;
-
-	pMainSN->m_base.setPos(temp_pos);
+	pMainSN->m_base.setPos(pEvt->m_pos);
 	pMainSN->m_base.setU(pEvt->m_u);
 	pMainSN->m_base.setV(pEvt->m_v);
 	pMainSN->m_base.setN(pEvt->m_n);
