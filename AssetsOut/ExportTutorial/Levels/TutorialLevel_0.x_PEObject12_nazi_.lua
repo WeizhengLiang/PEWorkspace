@@ -14,7 +14,7 @@ args['skelPackage'] = "Vampire"
 args['meshName'] = "Vampire.mesha"
 args['meshPackage'] = "Vampire"
 
-args['animsetName'] = "vampire-sample-action-pack_Hips.animseta"
+args['animsetName'] = "vampire-action-adventure-pack_Hips.animseta"
 args['animsetPackage'] = "Vampire"
 
 args['defaultAnimSet'] = 0  

@@ -8,14 +8,14 @@ function fillMetaInfoTable(args) -- the script fromat requires existance of this
 args['myScript']="Skin.lua"
 args['myScriptPackage']="Default"
 
-args['skelName'] = "soldier_Soldier_Skeleton.skela"
-args['skelPackage'] = "Soldier"
+args['skelName'] = "vampire-t-pose_Hips.skela"
+args['skelPackage'] = "Vampire"
 
-args['meshName'] = "SoldierTransform.mesha"
-args['meshPackage'] = "Soldier"
+args['meshName'] = "Vampire.mesha"
+args['meshPackage'] = "Vampire"
 
-args['animsetName'] = "soldier_Soldier_Skeleton.animseta"
-args['animsetPackage'] = "Soldier"
+args['animsetName'] = "vampire-sample-action-pack_Hips.animseta"
+args['animsetPackage'] = "Vampire"
 
 args['defaultAnimSet'] = 0  
 args['defaultAnim'] = 20

@@ -25,6 +25,7 @@
 #include "SceneNode.h"
 #include "DrawList.h"
 #include "SH_DRAW.h"
+#include <cstring>
 
 #include "DefaultAnimationSM.h"
 
@@ -73,7 +74,7 @@ void DefaultAnimationSM::addDefaultComponents()
 	// this event is used by PyClient/SkinViewer to set playing animation
 	// but can be used by any other objects who want to set animation of the skin but don't know anything about its components (can't call methods directly)
 	PE_REGISTER_EVENT_HANDLER(Events::Event_PLAY_ANIMATION, DefaultAnimationSM::do_Event_PLAY_ANIMATION);
-
+	
 	PE_REGISTER_EVENT_HANDLER(Event_PRE_RENDER_needsRC, DefaultAnimationSM::do_PRE_RENDER_needsRC);
 }
 
@@ -101,6 +102,64 @@ void DefaultAnimationSM::createAdditionalLocalTransforms()
 
 void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 {
+	// TEMPORARY: Auto-cycle animations for Vampire (only once)
+	static bool hasCheckedForVampire = false;
+	static float vampireAnimTimer = 0.0f;
+	static int vampireAnimIndex = 0;
+	
+	if (!hasCheckedForVampire) {
+		hasCheckedForVampire = true;
+		
+		PEINFO("*** CHECKING FOR VAMPIRE AUTO-CREATION (in SCENE_GRAPH_UPDATE) ***\n");
+		PE::Handle hParentSN = getFirstParentByType<PE::Components::SceneNode>();
+		if (hParentSN.isValid()) {
+			PEINFO("  - Parent SceneNode found\n");
+			PE::Components::SceneNode *pParentSN = hParentSN.getObject<PE::Components::SceneNode>();
+			// Check if this is a Vampire by looking at the mesh name
+			PE::Components::MeshInstance *pMesh = pParentSN->getFirstComponent<PE::Components::MeshInstance>();
+			if (pMesh) {
+				PEINFO("  - MeshInstance found\n");
+				if (pMesh->m_hAsset.isValid()) {
+					PEINFO("  - Mesh asset handle is valid\n");
+					PE::Components::Mesh *pMeshObj = pMesh->m_hAsset.getObject<PE::Components::Mesh>();
+					if (pMeshObj) {
+						PEINFO("  - Mesh object found, name: %s\n", pMeshObj->m_meshName);
+						if (strstr(pMeshObj->m_meshName, "Vampire") != nullptr) {
+							PEINFO("*** VAMPIRE DETECTED - Starting auto animation cycling ***\n");
+							vampireAnimIndex = 0; // Start with animation 0
+							vampireAnimTimer = 0.0f;
+						} else {
+							PEINFO("  - Not a Vampire mesh\n");
+						}
+					} else {
+						PEINFO("  - Mesh object is null\n");
+					}
+				} else {
+					PEINFO("  - Mesh asset handle is invalid\n");
+				}
+			} else {
+				PEINFO("  - No MeshInstance found\n");
+			}
+		} else {
+			PEINFO("  - No parent SceneNode found\n");
+		}
+	}
+	
+	// Auto-cycle animations for Vampire every 3 seconds
+	if (vampireAnimIndex >= 0) {
+		vampireAnimTimer += 0.016f; // Assume ~60fps
+		
+		if (vampireAnimTimer >= 3.0f) {
+			vampireAnimIndex = (vampireAnimIndex + 1) % 3; // Cycle through 0, 1, 2
+			vampireAnimTimer = 0.0f;
+			
+			PEINFO("*** VAMPIRE: Switching to animation %d ***\n", vampireAnimIndex);
+			
+			// Play the animation
+			setAnimation(0, vampireAnimIndex, 0, 0, 1, 1, LOOPING);
+		}
+	}
+
 	Events::Event_UPDATE *pRealEvent = (Events::Event_UPDATE*)(pEvt);
 	Handle hParentSkinInstance = getFirstParentByType<SkeletonInstance>();
 	PEASSERT(hParentSkinInstance.isValid(), "SM has to belong to skeleton instance");

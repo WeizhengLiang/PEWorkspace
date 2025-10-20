@@ -39,5 +39,10 @@ function runScript(args)
         hSkin = l_getLastAddedGameObjectHandle(l_getGameContext())
         evtH = root.PE.Events.Event_PLAY_ANIMATION.Construct(args['defaultAnimSet'], args['defaultAnim'])
         root.PE.Components.Component.SendEventToHandle(hSkin, evtH)
+        
+        -- Vampire will automatically cycle through animations via DefaultAnimationSM
+        if args['meshName'] == "Vampire.mesha" then
+            outputDebugString("*** VAMPIRE DETECTED - Animation cycling enabled ***")
+        end
     end
 end
