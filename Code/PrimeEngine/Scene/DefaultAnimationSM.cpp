@@ -151,6 +151,14 @@ void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 
 		AnimationCPU &anim = pAnimSetCPU->m_animations[animIndex];
 
+		// tem print out the animation name-------------------
+		static bool printedOnce = false;
+		if(!printedOnce){
+			PEINFO("found skeleton instance playing [%s]\n", anim.m_name);
+			printedOnce = true;
+		}
+		// end temp print out the animation name-------------------
+
 		bool doFrameCalculations = false;
 		// if looping make sure that the last frame plays deserved time, i.e. 31 frames play frame_time * 31 where last frame is blended with 0th frame
 		//if (frame >= (PrimitiveTypes::Float32)(anim.m_frames.m_size - (slot.m_looping ? 0 : 1)))
