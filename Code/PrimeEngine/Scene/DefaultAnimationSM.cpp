@@ -162,6 +162,9 @@ void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 			
 			if (demonstrationCase == 1) {
 				PEINFO("\n*** SWITCHING TO CASE 1: Full-body animation blending ***\n");
+				// Reset animation indices for Case 1
+				vampireAnimFrom = 0;
+				vampireAnimTo = 1;
 			} else {
 				PEINFO("\n*** SWITCHING TO CASE 2: Partial-body animation ***\n");
 			}
