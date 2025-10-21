@@ -26,6 +26,7 @@
 #include "DrawList.h"
 #include "SH_DRAW.h"
 #include <cstring>
+#include <cmath>
 
 #include "DefaultAnimationSM.h"
 
@@ -173,74 +174,65 @@ void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 		// Execute current case
 		if (demonstrationCase == 1) {
 			// CASE 1: Full-body blending
-			vampireBlendTimer += deltaTime;
-			
-			const float BLEND_DURATION = 2.0f;
-			const float HOLD_DURATION = 2.0f;
-			const float TOTAL_CYCLE = BLEND_DURATION + HOLD_DURATION;
-			
-			// Phase 1: Setup blend ONCE at the very start
 			if (!vampireBlendSetup) {
 				vampireBlendSetup = true;
 				
-				// // Print all available animations
-				// AnimSetBufferGPU *pAnimSetBufferGPU = hAnimSets[0].getObject<AnimSetBufferGPU>();
-				// AnimationSetCPU *pAnimSetCPU = pAnimSetBufferGPU->m_hAnimationSetCPU.getObject<AnimationSetCPU>();
+				PEINFO("*** CASE 1: Setting up full-body animation blending ***\n");
 				
-				// PEINFO("\n=== VAMPIRE ANIMATION LIST (%d total) ===\n", pAnimSetCPU->m_animations.m_size);
-				// for (PrimitiveTypes::UInt32 i = 0; i < pAnimSetCPU->m_animations.m_size; i++) {
-				// 	AnimationCPU &anim = pAnimSetCPU->m_animations[i];
-				// 	PEINFO("  [%2d] %s (%d frames)\n", i, anim.m_name, anim.m_frames.m_size);
-				// }
-				// PEINFO("=====================================\n\n");
+				// Clear all slots
+				for (int i = 0; i < 8; i++) {
+					m_animSlots[i].setNotActive();
+				}
 				
-				PEINFO("*** CASE 1: Initial setup - blend from anim[%d] to anim[%d] ***\n", vampireAnimFrom, vampireAnimTo);
-				
-				// Set up two animation slots ONCE at the beginning
-				setAnimations(0, vampireAnimFrom, 0, vampireAnimTo, 0.0f, 0, 1, 2, 7, LOOPING);
-			}
-			
-			// Phase 2: Update blend weights and handle cycling
-			float alpha = 0.0f;
-			if (vampireBlendTimer < BLEND_DURATION) {
-				alpha = vampireBlendTimer / BLEND_DURATION;
-			} else if (vampireBlendTimer < TOTAL_CYCLE) {
-				alpha = 1.0f;
-			} else {
-				// Phase 3: Cycle to next animation pair
-				vampireBlendTimer = 0.0f;
-				int oldAnimFrom = vampireAnimFrom;
-				vampireAnimFrom = vampireAnimTo;
-				vampireAnimTo = (vampireAnimTo + 1) % 3;
-				alpha = 0.0f;
-				
-				PEINFO("*** CASE 1: Cycling to anim[%d]->anim[%d] ***\n", vampireAnimFrom, vampireAnimTo);
-				
-				// Manually update the animation indices in the slots
 				AnimSetBufferGPU *pAnimSetBufferGPU = hAnimSets[0].getObject<AnimSetBufferGPU>();
 				AnimationSetCPU *pAnimSetCPU = pAnimSetBufferGPU->m_hAnimationSetCPU.getObject<AnimationSetCPU>();
 				
-				AnimationCPU &animFrom = pAnimSetCPU->m_animations[vampireAnimFrom];
-				m_animSlots[0].m_animationIndex = vampireAnimFrom;
+				// Slot 0: First animation (a00_idle_look_around) - weight 0.5
+				AnimationCPU &anim0 = pAnimSetCPU->m_animations[0];
+				m_animSlots[0].m_animationSetIndex = 0;
+				m_animSlots[0].m_animationIndex = 0;
 				m_animSlots[0].m_frameIndex = 0;
-				m_animSlots[0].m_framesLeft = (float)(animFrom.m_frames.m_size - 1);
-				m_animSlots[0].m_numFrames = (float)(animFrom.m_frames.m_size - 1);
+				m_animSlots[0].m_startJoint = 0;
+				m_animSlots[0].m_endJoint = 0;  // 0 means full body
+				m_animSlots[0].m_flags = ACTIVE | LOOPING;
+				m_animSlots[0].m_weight = 0.5f;
+				m_animSlots[0].m_framesLeft = (float)(anim0.m_frames.m_size - 1);
+				m_animSlots[0].m_numFrames = (float)(anim0.m_frames.m_size - 1);
 				
-				AnimationCPU &animTo = pAnimSetCPU->m_animations[vampireAnimTo];
-				m_animSlots[1].m_animationIndex = vampireAnimTo;
+				PEINFO("*** Anim0 (weight 0.5): %s ***\n", anim0.m_name);
+				
+				// Slot 1: Second animation (a01_falling_idle) - weight 0.5
+				AnimationCPU &anim1 = pAnimSetCPU->m_animations[1];
+				m_animSlots[1].m_animationSetIndex = 0;
+				m_animSlots[1].m_animationIndex = 1;
 				m_animSlots[1].m_frameIndex = 0;
-				m_animSlots[1].m_framesLeft = (float)(animTo.m_frames.m_size - 1);
-				m_animSlots[1].m_numFrames = (float)(animTo.m_frames.m_size - 1);
+				m_animSlots[1].m_startJoint = 0;
+				m_animSlots[1].m_endJoint = 0;  // 0 means full body
+				m_animSlots[1].m_flags = ACTIVE | LOOPING;
+				m_animSlots[1].m_weight = 0.5f;
+				m_animSlots[1].m_framesLeft = (float)(anim1.m_frames.m_size - 1);
+				m_animSlots[1].m_numFrames = (float)(anim1.m_frames.m_size - 1);
+				
+				PEINFO("*** Anim1 (weight 0.5): %s ***\n", anim1.m_name);
 			}
 			
-			// Update weights
-			setWeightsBetweenAnimations(0, vampireAnimFrom, 0, vampireAnimTo, 0, 1, alpha);
+			// Animate blend weights over time
+			vampireBlendTimer += deltaTime;
+			const float BLEND_CYCLE = 4.0f;  // 4 second full cycle
+			float t = fmod(vampireBlendTimer, BLEND_CYCLE) / BLEND_CYCLE;  // 0.0 to 1.0
+			
+			// Use a sine wave for smooth back-and-forth blending
+			float alpha = (sin(t * 3.14159f * 2.0f) + 1.0f) * 0.5f;  // 0.0 to 1.0 and back
+			
+			m_animSlots[0].m_weight = 1.0f - alpha;
+			m_animSlots[1].m_weight = alpha;
 			
 			// Debug
 			static float debugTimer1 = 0.0f;
 			debugTimer1 += deltaTime;
 			if (debugTimer1 >= 1.0f) {
-				PEINFO("*** CASE 1: anim[%d]->[%d], alpha=%.2f ***\n", vampireAnimFrom, vampireAnimTo, alpha);
+				PEINFO("*** CASE 1: anim[0] weight=%.2f, anim[1] weight=%.2f ***\n", 
+					m_animSlots[0].m_weight, m_animSlots[1].m_weight);
 				debugTimer1 = 0.0f;
 			}
 		}
