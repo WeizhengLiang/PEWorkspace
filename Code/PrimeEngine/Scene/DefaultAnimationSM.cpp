@@ -102,64 +102,119 @@ void DefaultAnimationSM::createAdditionalLocalTransforms()
 
 void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 {
-	// TEMPORARY: Auto-cycle animations for Vampire (only once)
-	static bool hasCheckedForVampire = false;
-	static float vampireAnimTimer = 0.0f;
-	static int vampireAnimIndex = 0;
+	// CASE 1: Smooth full-body animation blending for Vampire
+	// Use global static variables - the Vampire's DefaultAnimationSM will trigger this
+	static bool vampireBlendActive = false;
+	static bool vampireBlendSetup = false;
+	static float vampireBlendTimer = 0.0f;
+	static int vampireAnimFrom = 0;
+	static int vampireAnimTo = 1;
 	
-	if (!hasCheckedForVampire) {
-		hasCheckedForVampire = true;
-		
-		PEINFO("*** CHECKING FOR VAMPIRE AUTO-CREATION (in SCENE_GRAPH_UPDATE) ***\n");
-		PE::Handle hParentSN = getFirstParentByType<PE::Components::SceneNode>();
-		if (hParentSN.isValid()) {
-			PEINFO("  - Parent SceneNode found\n");
-			PE::Components::SceneNode *pParentSN = hParentSN.getObject<PE::Components::SceneNode>();
-			// Check if this is a Vampire by looking at the mesh name
-			PE::Components::MeshInstance *pMesh = pParentSN->getFirstComponent<PE::Components::MeshInstance>();
-			if (pMesh) {
-				PEINFO("  - MeshInstance found\n");
-				if (pMesh->m_hAsset.isValid()) {
-					PEINFO("  - Mesh asset handle is valid\n");
-					PE::Components::Mesh *pMeshObj = pMesh->m_hAsset.getObject<PE::Components::Mesh>();
-					if (pMeshObj) {
-						PEINFO("  - Mesh object found, name: %s\n", pMeshObj->m_meshName);
-						if (strstr(pMeshObj->m_meshName, "Vampire") != nullptr) {
-							PEINFO("*** VAMPIRE DETECTED - Starting auto animation cycling ***\n");
-							vampireAnimIndex = 0; // Start with animation 0
-							vampireAnimTimer = 0.0f;
-						} else {
-							PEINFO("  - Not a Vampire mesh\n");
-						}
-					} else {
-						PEINFO("  - Mesh object is null\n");
-					}
-				} else {
-					PEINFO("  - Mesh asset handle is invalid\n");
+	// Simple check: if any DefaultAnimationSM has more than 2 animations, enable blending
+	// (Vampire has many animations, soldiers typically have fewer)
+	if (!vampireBlendActive) {
+		Handle hParentSkinInstance = getFirstParentByType<SkeletonInstance>();
+		if (hParentSkinInstance.isValid()) {
+			SkeletonInstance *pSkelInstance = hParentSkinInstance.getObject<SkeletonInstance>();
+			Array<Handle> &hAnimSets = pSkelInstance->m_hAnimationSetGPUs;
+			if (hAnimSets.m_size > 0) {
+				AnimSetBufferGPU *pAnimSetBufferGPU = hAnimSets[0].getObject<AnimSetBufferGPU>();
+				AnimationSetCPU *pAnimSetCPU = pAnimSetBufferGPU->m_hAnimationSetCPU.getObject<AnimationSetCPU>();
+				
+				// If this character has 3+ animations, enable blending
+				if (pAnimSetCPU->m_animations.m_size >= 3) {
+					vampireBlendActive = true;
+					PEINFO("*** CASE 1: Full-body animation blending enabled (found %d animations) ***\n", 
+						pAnimSetCPU->m_animations.m_size);
 				}
-			} else {
-				PEINFO("  - No MeshInstance found\n");
 			}
-		} else {
-			PEINFO("  - No parent SceneNode found\n");
 		}
 	}
 	
-	// Auto-cycle animations for Vampire every 3 seconds
-	if (vampireAnimIndex >= 0) {
-		vampireAnimTimer += 0.016f; // Assume ~60fps
+	// CASE 1: Blending logic
+	if (vampireBlendActive) {
+		// Verify animation set is ready before proceeding
+		Handle hParentSkinInstance = getFirstParentByType<SkeletonInstance>();
+		if (!hParentSkinInstance.isValid()) {
+			goto skip_vampire_blending;  // Not ready yet
+		}
 		
-		if (vampireAnimTimer >= 3.0f) {
-			vampireAnimIndex = (vampireAnimIndex + 1) % 3; // Cycle through 0, 1, 2
-			vampireAnimTimer = 0.0f;
+		SkeletonInstance *pSkelInstance = hParentSkinInstance.getObject<SkeletonInstance>();
+		Array<Handle> &hAnimSets = pSkelInstance->m_hAnimationSetGPUs;
+		if (hAnimSets.m_size == 0) {
+			goto skip_vampire_blending;  // Animation set not loaded yet
+		}
+		
+		Events::Event_UPDATE *pRealEvt = (Events::Event_UPDATE*)(pEvt);
+		float deltaTime = pRealEvt->m_frameTime;
+		
+		vampireBlendTimer += deltaTime;
+		
+		const float BLEND_DURATION = 2.0f;
+		const float HOLD_DURATION = 2.0f;
+		const float TOTAL_CYCLE = BLEND_DURATION + HOLD_DURATION;
+		
+		// Phase 1: Setup blend ONCE at the very start
+		if (!vampireBlendSetup) {
+			vampireBlendSetup = true;
+			PEINFO("*** CASE 1: Initial setup - blend from anim[%d] to anim[%d] ***\n", vampireAnimFrom, vampireAnimTo);
 			
-			PEINFO("*** VAMPIRE: Switching to animation %d ***\n", vampireAnimIndex);
+			// Set up two animation slots ONCE at the beginning
+			// Parameters: animSet0, anim0, animSet1, anim1, alpha, firstActive, lastActive, firstFading, lastFading, flags
+			setAnimations(0, vampireAnimFrom, 0, vampireAnimTo, 0.0f, 0, 1, 2, 7, LOOPING);
+		}
+		
+		// Phase 2: Update blend weights and handle cycling
+		float alpha = 0.0f;
+		if (vampireBlendTimer < BLEND_DURATION) {
+			alpha = vampireBlendTimer / BLEND_DURATION;
+		} else if (vampireBlendTimer < TOTAL_CYCLE) {
+			alpha = 1.0f;
+		} else {
+			// Phase 3: Cycle to next animation pair
+			vampireBlendTimer = 0.0f;
+			int oldAnimFrom = vampireAnimFrom;
+			vampireAnimFrom = vampireAnimTo;
+			vampireAnimTo = (vampireAnimTo + 1) % 3;
+			alpha = 0.0f;
 			
-			// Play the animation
-			setAnimation(0, vampireAnimIndex, 0, 0, 1, 1, LOOPING);
+			PEINFO("*** CASE 1: Cycling from anim[%d]->anim[%d] to anim[%d]->anim[%d] ***\n", 
+				oldAnimFrom, oldAnimFrom == 0 ? 1 : (oldAnimFrom == 1 ? 2 : 0),
+				vampireAnimFrom, vampireAnimTo);
+			
+			// Manually update the animation indices in the slots without calling setAnimations
+			// Slot 0 should now play vampireAnimFrom, Slot 1 should play vampireAnimTo
+			AnimSetBufferGPU *pAnimSetBufferGPU = hAnimSets[0].getObject<AnimSetBufferGPU>();
+			AnimationSetCPU *pAnimSetCPU = pAnimSetBufferGPU->m_hAnimationSetCPU.getObject<AnimationSetCPU>();
+			
+			// Update slot 0 to the new "from" animation
+			AnimationCPU &animFrom = pAnimSetCPU->m_animations[vampireAnimFrom];
+			m_animSlots[0].m_animationIndex = vampireAnimFrom;
+			m_animSlots[0].m_frameIndex = 0;
+			m_animSlots[0].m_framesLeft = (float)(animFrom.m_frames.m_size - 1);
+			m_animSlots[0].m_numFrames = (float)(animFrom.m_frames.m_size - 1);
+			
+			// Update slot 1 to the new "to" animation
+			AnimationCPU &animTo = pAnimSetCPU->m_animations[vampireAnimTo];
+			m_animSlots[1].m_animationIndex = vampireAnimTo;
+			m_animSlots[1].m_frameIndex = 0;
+			m_animSlots[1].m_framesLeft = (float)(animTo.m_frames.m_size - 1);
+			m_animSlots[1].m_numFrames = (float)(animTo.m_frames.m_size - 1);
+		}
+		
+		// Update weights without resetting animation state
+		setWeightsBetweenAnimations(0, vampireAnimFrom, 0, vampireAnimTo, 0, 1, alpha);
+		
+		// Debug every second
+		static float debugTimer = 0.0f;
+		debugTimer += deltaTime;
+		if (debugTimer >= 1.0f) {
+			PEINFO("*** CASE 1: anim[%d]->[%d], alpha=%.2f ***\n", vampireAnimFrom, vampireAnimTo, alpha);
+			debugTimer = 0.0f;
 		}
 	}
-
+	
+skip_vampire_blending:
 	Events::Event_UPDATE *pRealEvent = (Events::Event_UPDATE*)(pEvt);
 	Handle hParentSkinInstance = getFirstParentByType<SkeletonInstance>();
 	PEASSERT(hParentSkinInstance.isValid(), "SM has to belong to skeleton instance");
