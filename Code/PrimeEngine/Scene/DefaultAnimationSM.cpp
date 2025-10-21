@@ -183,16 +183,16 @@ void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 			if (!vampireBlendSetup) {
 				vampireBlendSetup = true;
 				
-				// Print all available animations
-				AnimSetBufferGPU *pAnimSetBufferGPU = hAnimSets[0].getObject<AnimSetBufferGPU>();
-				AnimationSetCPU *pAnimSetCPU = pAnimSetBufferGPU->m_hAnimationSetCPU.getObject<AnimationSetCPU>();
+				// // Print all available animations
+				// AnimSetBufferGPU *pAnimSetBufferGPU = hAnimSets[0].getObject<AnimSetBufferGPU>();
+				// AnimationSetCPU *pAnimSetCPU = pAnimSetBufferGPU->m_hAnimationSetCPU.getObject<AnimationSetCPU>();
 				
-				PEINFO("\n=== VAMPIRE ANIMATION LIST (%d total) ===\n", pAnimSetCPU->m_animations.m_size);
-				for (PrimitiveTypes::UInt32 i = 0; i < pAnimSetCPU->m_animations.m_size; i++) {
-					AnimationCPU &anim = pAnimSetCPU->m_animations[i];
-					PEINFO("  [%2d] %s (%d frames)\n", i, anim.m_name, anim.m_frames.m_size);
-				}
-				PEINFO("=====================================\n\n");
+				// PEINFO("\n=== VAMPIRE ANIMATION LIST (%d total) ===\n", pAnimSetCPU->m_animations.m_size);
+				// for (PrimitiveTypes::UInt32 i = 0; i < pAnimSetCPU->m_animations.m_size; i++) {
+				// 	AnimationCPU &anim = pAnimSetCPU->m_animations[i];
+				// 	PEINFO("  [%2d] %s (%d frames)\n", i, anim.m_name, anim.m_frames.m_size);
+				// }
+				// PEINFO("=====================================\n\n");
 				
 				PEINFO("*** CASE 1: Initial setup - blend from anim[%d] to anim[%d] ***\n", vampireAnimFrom, vampireAnimTo);
 				
@@ -254,15 +254,15 @@ void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 				SkeletonCPU *pSkelCPU = pSkeleton->m_hSkeletonCPU.getObject<SkeletonCPU>();
 				PrimitiveTypes::UInt32 totalJoints = pSkelCPU->m_numJoints;
 				
-				// Print all joint names to identify the skeleton structure
-				PEINFO("\n=== VAMPIRE SKELETON STRUCTURE (%d joints) ===\n", totalJoints);
-				for (PrimitiveTypes::UInt32 i = 0; i < totalJoints; i++) {
-					PEINFO("  Joint[%2d]: %s (parent: %d)\n", 
-						i, 
-						pSkelCPU->m_fastJoints[i].m_pJointCPU->m_name,
-						pSkelCPU->m_fastJoints[i].m_parent == nullptr ? -1 : pSkelCPU->m_fastJoints[i].m_parent->m_index);
-				}
-				PEINFO("==========================================\n\n");
+				// // Print all joint names to identify the skeleton structure
+				// PEINFO("\n=== VAMPIRE SKELETON STRUCTURE (%d joints) ===\n", totalJoints);
+				// for (PrimitiveTypes::UInt32 i = 0; i < totalJoints; i++) {
+				// 	PEINFO("  Joint[%2d]: %s (parent: %d)\n", 
+				// 		i, 
+				// 		pSkelCPU->m_fastJoints[i].m_pJointCPU->m_name,
+				// 		pSkelCPU->m_fastJoints[i].m_parent == nullptr ? -1 : pSkelCPU->m_fastJoints[i].m_parent->m_index);
+				// }
+				// PEINFO("==========================================\n\n");
 				
 				// Split at joint 54 (after arms/head, before legs)
 				// Part 1 = Hips + Torso + Arms + Head (joints 0-54)
