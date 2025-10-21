@@ -250,11 +250,25 @@ void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 				Skeleton *pSkeleton = pSkelInstance->getFirstParentByTypePtr<Skeleton>();
 				SkeletonCPU *pSkelCPU = pSkeleton->m_hSkeletonCPU.getObject<SkeletonCPU>();
 				PrimitiveTypes::UInt32 totalJoints = pSkelCPU->m_numJoints;
-				PrimitiveTypes::UInt32 lowerBodyEnd = totalJoints / 3;  // First 1/3 = lower body
+				
+				// Print all joint names to identify the skeleton structure
+				PEINFO("\n=== VAMPIRE SKELETON STRUCTURE (%d joints) ===\n", totalJoints);
+				for (PrimitiveTypes::UInt32 i = 0; i < totalJoints; i++) {
+					PEINFO("  Joint[%2d]: %s (parent: %d)\n", 
+						i, 
+						pSkelCPU->m_fastJoints[i].m_pJointCPU->m_name,
+						pSkelCPU->m_fastJoints[i].m_parent == nullptr ? -1 : pSkelCPU->m_fastJoints[i].m_parent->m_index);
+				}
+				PEINFO("==========================================\n\n");
+				
+				// Split at joint 54 (after arms/head, before legs)
+				// Part 1 = Hips + Torso + Arms + Head (joints 0-54)
+				// Part 2 = Legs (joints 55-64)
+				PrimitiveTypes::UInt32 torsoEnd = 54;  // Torso/arms/head end at joint 54
 				
 				PEINFO("*** CASE 2: Setting up partial-body animation ***\n");
-				PEINFO("*** Total joints=%d, Lower=[0-%d], Upper=[%d-%d] ***\n",
-					totalJoints, lowerBodyEnd, lowerBodyEnd + 1, totalJoints - 1);
+				PEINFO("*** Part 1 (Torso/Arms/Head)=[0-%d], Part 2 (Legs)=[%d-%d] ***\n",
+					torsoEnd, torsoEnd + 1, totalJoints - 1);
 				
 				// Clear all slots
 				for (int i = 0; i < 8; i++) {
@@ -264,40 +278,40 @@ void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 				AnimSetBufferGPU *pAnimSetBufferGPU = hAnimSets[0].getObject<AnimSetBufferGPU>();
 				AnimationSetCPU *pAnimSetCPU = pAnimSetBufferGPU->m_hAnimationSetCPU.getObject<AnimationSetCPU>();
 				
-				// Slot 0: Lower body animation (animation 12)
-				AnimationCPU &lowerAnim = pAnimSetCPU->m_animations[12];
+				// Slot 0: Torso/Arms/Head (joints 0-54) - animation 1 (idle_look_around)
+				AnimationCPU &torsoAnim = pAnimSetCPU->m_animations[1];
 				m_animSlots[0].m_animationSetIndex = 0;
-				m_animSlots[0].m_animationIndex = 12;
+				m_animSlots[0].m_animationIndex = 1;
 				m_animSlots[0].m_frameIndex = 0;
 				m_animSlots[0].m_startJoint = 0;
-				m_animSlots[0].m_endJoint = lowerBodyEnd;
+				m_animSlots[0].m_endJoint = torsoEnd;
 				m_animSlots[0].m_flags = ACTIVE | LOOPING | PARTIAL_BODY_ANIMATION;
 				m_animSlots[0].m_weight = 1.0f;
-				m_animSlots[0].m_framesLeft = (float)(lowerAnim.m_frames.m_size - 1);
-				m_animSlots[0].m_numFrames = (float)(lowerAnim.m_frames.m_size - 1);
+				m_animSlots[0].m_framesLeft = (float)(torsoAnim.m_frames.m_size - 1);
+				m_animSlots[0].m_numFrames = (float)(torsoAnim.m_frames.m_size - 1);
 				
-				PEINFO("*** Lower body: %s ***\n", lowerAnim.m_name);
+				PEINFO("*** Torso/Arms/Head (0-54): %s ***\n", torsoAnim.m_name);
 				
-				// Slot 1: Upper body animation (animation 1)
-				AnimationCPU &upperAnim = pAnimSetCPU->m_animations[1];
+				// Slot 1: Legs (joints 55-64) - animation 12 (walk)
+				AnimationCPU &legsAnim = pAnimSetCPU->m_animations[12];
 				m_animSlots[1].m_animationSetIndex = 0;
-				m_animSlots[1].m_animationIndex = 1;
+				m_animSlots[1].m_animationIndex = 12;
 				m_animSlots[1].m_frameIndex = 0;
-				m_animSlots[1].m_startJoint = lowerBodyEnd + 1;
+				m_animSlots[1].m_startJoint = torsoEnd + 1;
 				m_animSlots[1].m_endJoint = totalJoints - 1;
 				m_animSlots[1].m_flags = ACTIVE | LOOPING | PARTIAL_BODY_ANIMATION;
 				m_animSlots[1].m_weight = 1.0f;
-				m_animSlots[1].m_framesLeft = (float)(upperAnim.m_frames.m_size - 1);
-				m_animSlots[1].m_numFrames = (float)(upperAnim.m_frames.m_size - 1);
+				m_animSlots[1].m_framesLeft = (float)(legsAnim.m_frames.m_size - 1);
+				m_animSlots[1].m_numFrames = (float)(legsAnim.m_frames.m_size - 1);
 				
-				PEINFO("*** Upper body: %s ***\n", upperAnim.m_name);
+				PEINFO("*** Legs (55-64): %s ***\n", legsAnim.m_name);
 			}
 			
 			// Debug
 			static float debugTimer2 = 0.0f;
 			debugTimer2 += deltaTime;
 			if (debugTimer2 >= 1.0f) {
-				PEINFO("*** CASE 2: Lower=anim[12,frame=%.0f], Upper=anim[1,frame=%.0f] ***\n",
+				PEINFO("*** CASE 2: Torso/Arms=anim[1,frame=%.0f], Legs=anim[12,frame=%.0f] ***\n",
 					m_animSlots[0].m_frameIndex, m_animSlots[1].m_frameIndex);
 				debugTimer2 = 0.0f;
 			}
