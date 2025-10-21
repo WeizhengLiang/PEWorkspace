@@ -151,23 +151,25 @@ void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 		Events::Event_UPDATE *pRealEvt = (Events::Event_UPDATE*)(pEvt);
 		float deltaTime = pRealEvt->m_frameTime;
 		
-		// Switch between Case 1 and Case 2 every 10 seconds
+		// Switch between Case 1, 2, and 3 every 10 seconds
 		caseTimer += deltaTime;
 		const float CASE_SWITCH_TIME = 10.0f;
 		
 		if (caseTimer >= CASE_SWITCH_TIME) {
 			caseTimer = 0.0f;
-			demonstrationCase = (demonstrationCase == 1) ? 2 : 1;
+			demonstrationCase++;
+			if (demonstrationCase > 3) demonstrationCase = 1;
 			vampireBlendSetup = false;  // Reset setup flag
 			vampireBlendTimer = 0.0f;
 			
 			if (demonstrationCase == 1) {
 				PEINFO("\n*** SWITCHING TO CASE 1: Full-body animation blending ***\n");
-				// Reset animation indices for Case 1
 				vampireAnimFrom = 0;
 				vampireAnimTo = 1;
-			} else {
+			} else if (demonstrationCase == 2) {
 				PEINFO("\n*** SWITCHING TO CASE 2: Partial-body animation ***\n");
+			} else if (demonstrationCase == 3) {
+				PEINFO("\n*** SWITCHING TO CASE 3: Full-body + Additive animation ***\n");
 			}
 		}
 		
@@ -309,6 +311,69 @@ void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 				PEINFO("*** CASE 2: Torso/Arms=anim[1,frame=%.0f], Legs=anim[12,frame=%.0f] ***\n",
 					m_animSlots[0].m_frameIndex, m_animSlots[1].m_frameIndex);
 				debugTimer2 = 0.0f;
+			}
+		}
+		else if (demonstrationCase == 3) {
+			// CASE 3: Full-body + Additive animation
+			if (!vampireBlendSetup) {
+				vampireBlendSetup = true;
+				
+				PEINFO("*** CASE 3: Setting up full-body + additive animation ***\n");
+				
+				// Clear all slots
+				for (int i = 0; i < 8; i++) {
+					m_animSlots[i].setNotActive();
+				}
+				
+				AnimSetBufferGPU *pAnimSetBufferGPU = hAnimSets[0].getObject<AnimSetBufferGPU>();
+				AnimationSetCPU *pAnimSetCPU = pAnimSetBufferGPU->m_hAnimationSetCPU.getObject<AnimationSetCPU>();
+				
+				// Slot 0: Base full-body animation (a00_idle_look_around)
+				AnimationCPU &baseAnim = pAnimSetCPU->m_animations[0];
+				m_animSlots[0].m_animationSetIndex = 0;
+				m_animSlots[0].m_animationIndex = 0;
+				m_animSlots[0].m_frameIndex = 0;
+				m_animSlots[0].m_startJoint = 0;
+				m_animSlots[0].m_endJoint = 0;  // 0 means full body
+				m_animSlots[0].m_flags = ACTIVE | LOOPING;
+				m_animSlots[0].m_weight = 1.0f;
+				m_animSlots[0].m_framesLeft = (float)(baseAnim.m_frames.m_size - 1);
+				m_animSlots[0].m_numFrames = (float)(baseAnim.m_frames.m_size - 1);
+				
+				PEINFO("*** Base animation: %s ***\n", baseAnim.m_name);
+				
+				// Slot 1: Additive animation (a01_falling_idle)
+				// This will be added on top of the base animation
+				AnimationCPU &additiveAnim = pAnimSetCPU->m_animations[1];
+				m_animSlots[1].m_animationSetIndex = 0;
+				m_animSlots[1].m_animationIndex = 1;
+				m_animSlots[1].m_frameIndex = 0;
+				m_animSlots[1].m_startJoint = 0;
+				m_animSlots[1].m_endJoint = 0;  // 0 means full body
+				m_animSlots[1].m_flags = ACTIVE | LOOPING | ADDITIVE_ANIMATION;
+				m_animSlots[1].m_weight = 0.5f;  // Additive weight (0.5 = half strength)
+				m_animSlots[1].m_framesLeft = (float)(additiveAnim.m_frames.m_size - 1);
+				m_animSlots[1].m_numFrames = (float)(additiveAnim.m_frames.m_size - 1);
+				
+				PEINFO("*** Additive animation: %s (weight 0.5) ***\n", additiveAnim.m_name);
+			}
+			
+			// Animate additive weight over time
+			vampireBlendTimer += deltaTime;
+			const float ADDITIVE_CYCLE = 4.0f;  // 4 second cycle
+			float t = fmod(vampireBlendTimer, ADDITIVE_CYCLE) / ADDITIVE_CYCLE;  // 0.0 to 1.0
+			
+			// Use sine wave for additive weight (0.0 to 1.0)
+			float additiveWeight = (sin(t * 3.14159f * 2.0f) + 1.0f) * 0.5f;
+			m_animSlots[1].m_weight = additiveWeight;
+			
+			// Debug
+			static float debugTimer3 = 0.0f;
+			debugTimer3 += deltaTime;
+			if (debugTimer3 >= 1.0f) {
+				PEINFO("*** CASE 3: Base=anim[0,frame=%.0f], Additive=anim[1,frame=%.0f,weight=%.2f] ***\n",
+					m_animSlots[0].m_frameIndex, m_animSlots[1].m_frameIndex, m_animSlots[1].m_weight);
+				debugTimer3 = 0.0f;
 			}
 		}
 	}

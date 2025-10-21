@@ -172,8 +172,10 @@ void SkeletonCPU::prepareMatrixPalette(JointCPU &jnt,
 	assert(curIndex == jnt.m_index);
 
 	PrimitiveTypes::UInt32 toBlend[32]; // indices of slots needed to blend
+	PrimitiveTypes::UInt32 toAdditive[32]; // indices of additive slots to apply after blending
 
 	PrimitiveTypes::UInt32 nBlend = 0;
+	PrimitiveTypes::UInt32 nAdditive = 0;
 
 	bool hasPartial = false;
 	for (PrimitiveTypes::UInt32 iSlot = 0; iSlot < slots.m_size; iSlot++)
@@ -199,6 +201,13 @@ void SkeletonCPU::prepareMatrixPalette(JointCPU &jnt,
 		AnimationSlot &curSlot = slots[iSlot];
 		if (!(curSlot.m_flags & ACTIVE))
 			continue;
+
+		// Separate additive animations from normal animations
+		if (curSlot.m_flags & ADDITIVE_ANIMATION)
+		{
+			toAdditive[nAdditive++] = iSlot;
+			continue;
+		}
 
 		if (hasPartial)
 		{
@@ -290,6 +299,83 @@ void SkeletonCPU::prepareMatrixPalette(JointCPU &jnt,
 	else
 	{
 		//assert(!"Have no animation for this joint!");
+	}
+
+	// Apply additive animations on top of the base animation
+	if (nAdditive > 0)
+	{
+		// Extract TSQ from the base local transform
+		TSQ baseLocalTSQ(local);
+		
+		// For each additive slot, extract its delta and apply it
+		for (PrimitiveTypes::UInt32 iAdd = 0; iAdd < nAdditive; iAdd++)
+		{
+			AnimationSlot &additiveSlot = slots[toAdditive[iAdd]];
+			AnimSetBufferGPU *pAdditiveAnimSetGPU = hAnimSetGPUs[additiveSlot.m_animationSetIndex].getObject<AnimSetBufferGPU>();
+			AnimationSetCPU *pAdditiveAnimSetCPU = pAdditiveAnimSetGPU->m_hAnimationSetCPU.getObject<AnimationSetCPU>();
+			AnimationCPU &additiveAnim = pAdditiveAnimSetCPU->m_animations[additiveSlot.m_animationIndex];
+			
+			// Interpolate between frames
+			TSQ a = additiveAnim.m_frames[additiveSlot.m_iFrameIndex0][jnt.m_index];
+			TSQ b = additiveAnim.m_frames[additiveSlot.m_iFrameIndex1][jnt.m_index];
+			TSQ additiveFrame = TSQ::SLERP(a, b, additiveSlot.m_blendFactor);
+			
+			// For additive animation, we treat frame 0 as the reference pose
+			// and compute the delta from there
+			TSQ referencePose = additiveAnim.m_frames[0][jnt.m_index];
+			
+			// Calculate delta: additiveFrame - referencePose
+			// For translation and scale (Vector4), we compute element-wise differences
+			Vector4 deltaTranslation = additiveFrame.m_translation * 1.0f;
+			deltaTranslation.m_x -= referencePose.m_translation.m_x;
+			deltaTranslation.m_y -= referencePose.m_translation.m_y;
+			deltaTranslation.m_z -= referencePose.m_translation.m_z;
+			
+			// Delta rotation (difference quaternion)
+			// deltaRot = additiveFrame.quat * inverse(referencePose.quat)
+			Quaternion refInverse = referencePose.m_quat.sopr();  // conjugate = inverse for unit quaternions
+			Quaternion deltaRotation = additiveFrame.m_quat * refInverse;
+			
+			// Delta scale (ratio)
+			Vector4 deltaScale;
+			deltaScale.m_x = additiveFrame.m_scale.m_x / referencePose.m_scale.m_x;
+			deltaScale.m_y = additiveFrame.m_scale.m_y / referencePose.m_scale.m_y;
+			deltaScale.m_z = additiveFrame.m_scale.m_z / referencePose.m_scale.m_z;
+			deltaScale.m_w = 0.0f;
+			
+			// Apply delta to base with weight
+			float weight = additiveSlot.m_weight;
+			
+			// Apply translation delta
+			baseLocalTSQ.m_translation.m_x += deltaTranslation.m_x * weight;
+			baseLocalTSQ.m_translation.m_y += deltaTranslation.m_y * weight;
+			baseLocalTSQ.m_translation.m_z += deltaTranslation.m_z * weight;
+			
+			// Apply delta rotation (slerp from identity to delta with weight)
+			Quaternion identityRot(1, 0, 0, 0);  // w=1, x=0, y=0, z=0
+			// Create identity and delta TSQ for slerping
+			TSQ identityTSQ;
+			identityTSQ.m_quat = identityRot;
+			identityTSQ.m_translation = Vector4(0, 0, 0, 0);
+			identityTSQ.m_scale = Vector4(1, 1, 1, 0);
+			
+			TSQ deltaTSQ;
+			deltaTSQ.m_quat = deltaRotation;
+			deltaTSQ.m_translation = Vector4(0, 0, 0, 0);
+			deltaTSQ.m_scale = Vector4(1, 1, 1, 0);
+			
+			TSQ weightedDeltaTSQ = TSQ::SLERP(identityTSQ, deltaTSQ, weight);
+			baseLocalTSQ.m_quat = baseLocalTSQ.m_quat * weightedDeltaTSQ.m_quat;
+			baseLocalTSQ.m_quat.normalize();
+			
+			// Apply delta scale
+			baseLocalTSQ.m_scale.m_x *= (1.0f + (deltaScale.m_x - 1.0f) * weight);
+			baseLocalTSQ.m_scale.m_y *= (1.0f + (deltaScale.m_y - 1.0f) * weight);
+			baseLocalTSQ.m_scale.m_z *= (1.0f + (deltaScale.m_z - 1.0f) * weight);
+		}
+		
+		// Convert back to matrix
+		local = baseLocalTSQ.createMatrix();
 	}
 
 	if (additionalLocalTransformFlags.m_size > jnt.m_index && additionalLocalTransformFlags[jnt.m_index])

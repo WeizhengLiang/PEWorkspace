@@ -30,6 +30,7 @@ enum AnimSlotFlags
 	FADING_AWAY = 0x08,
 	NOTIFY_ON_ANIMATION_END = 0x010,
 	STAY_ON_ANIMATION_END = 0x020,
+	ADDITIVE_ANIMATION = 0x040,
 };
 
 struct AnimationSlot
