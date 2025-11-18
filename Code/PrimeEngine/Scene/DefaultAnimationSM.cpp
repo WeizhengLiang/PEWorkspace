@@ -233,8 +233,14 @@ void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 			static float debugTimer1 = 0.0f;
 			debugTimer1 += deltaTime;
 			if (debugTimer1 >= 1.0f) {
-				PEINFO("*** CASE 1: anim[0] weight=%.2f, anim[1] weight=%.2f ***\n", 
-					m_animSlots[0].m_weight, m_animSlots[1].m_weight);
+				AnimSetBufferGPU *pAnimSetBufferGPU = hAnimSets[0].getObject<AnimSetBufferGPU>();
+				AnimationSetCPU *pAnimSetCPU = pAnimSetBufferGPU->m_hAnimationSetCPU.getObject<AnimationSetCPU>();
+				AnimationCPU &anim0 = pAnimSetCPU->m_animations[0];
+				AnimationCPU &anim1 = pAnimSetCPU->m_animations[1];
+				
+				PEINFO("*** CASE 1: [%s] weight=%.2f, [%s] weight=%.2f ***\n", 
+					anim0.m_name, m_animSlots[0].m_weight, 
+					anim1.m_name, m_animSlots[1].m_weight);
 				debugTimer1 = 0.0f;
 			}
 		}
@@ -308,8 +314,14 @@ void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 			static float debugTimer2 = 0.0f;
 			debugTimer2 += deltaTime;
 			if (debugTimer2 >= 1.0f) {
-				PEINFO("*** CASE 2: Torso/Arms=anim[1,frame=%.0f], Legs=anim[12,frame=%.0f] ***\n",
-					m_animSlots[0].m_frameIndex, m_animSlots[1].m_frameIndex);
+				AnimSetBufferGPU *pAnimSetBufferGPU = hAnimSets[0].getObject<AnimSetBufferGPU>();
+				AnimationSetCPU *pAnimSetCPU = pAnimSetBufferGPU->m_hAnimationSetCPU.getObject<AnimationSetCPU>();
+				AnimationCPU &torsoAnim = pAnimSetCPU->m_animations[1];
+				AnimationCPU &legsAnim = pAnimSetCPU->m_animations[12];
+				
+				PEINFO("*** CASE 2: Torso/Arms=[%s,frame=%.0f], Legs=[%s,frame=%.0f] ***\n",
+					torsoAnim.m_name, m_animSlots[0].m_frameIndex,
+					legsAnim.m_name, m_animSlots[1].m_frameIndex);
 				debugTimer2 = 0.0f;
 			}
 		}
@@ -371,8 +383,14 @@ void DefaultAnimationSM::do_SCENE_GRAPH_UPDATE(Events::Event *pEvt)
 			static float debugTimer3 = 0.0f;
 			debugTimer3 += deltaTime;
 			if (debugTimer3 >= 1.0f) {
-				PEINFO("*** CASE 3: Base=anim[0,frame=%.0f], Additive=anim[1,frame=%.0f,weight=%.2f] ***\n",
-					m_animSlots[0].m_frameIndex, m_animSlots[1].m_frameIndex, m_animSlots[1].m_weight);
+				AnimSetBufferGPU *pAnimSetBufferGPU = hAnimSets[0].getObject<AnimSetBufferGPU>();
+				AnimationSetCPU *pAnimSetCPU = pAnimSetBufferGPU->m_hAnimationSetCPU.getObject<AnimationSetCPU>();
+				AnimationCPU &baseAnim = pAnimSetCPU->m_animations[0];
+				AnimationCPU &additiveAnim = pAnimSetCPU->m_animations[1];
+				
+				PEINFO("*** CASE 3: Base=[%s,frame=%.0f], Additive=[%s,frame=%.0f,weight=%.2f] ***\n",
+					baseAnim.m_name, m_animSlots[0].m_frameIndex,
+					additiveAnim.m_name, m_animSlots[1].m_frameIndex, m_animSlots[1].m_weight);
 				debugTimer3 = 0.0f;
 			}
 		}
