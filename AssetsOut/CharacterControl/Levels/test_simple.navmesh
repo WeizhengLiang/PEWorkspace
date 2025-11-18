@@ -1,0 +1,38 @@
+# NavMesh file format for Prime Engine
+# Simple test navmesh - 2 triangles forming a square
+# Use this for initial testing before creating full level navmesh
+
+NAVMESH test_simple
+VERSION 1.0
+CREATED_BY Manual
+DATE 2025-11-17
+
+# Vertex data - 4 corners of a 10x10 square on XZ plane
+VERTEX_COUNT 4
+VERTICES
+0.0 0.0 0.0
+10.0 0.0 0.0
+10.0 0.0 10.0
+0.0 0.0 10.0
+
+# Triangle data (indices into vertex array)
+# Triangle 0: bottom-right half
+# Triangle 1: top-left half
+TRIANGLE_COUNT 2
+TRIANGLES
+0 1 2
+0 2 3
+
+# Adjacency information
+# Triangle 0: no neighbor on edge 0 (external), triangle 1 on edge 1, no neighbor on edge 2
+# Triangle 1: no neighbor on edge 0, no neighbor on edge 1, triangle 0 on edge 2
+ADJACENCY
+0 -1 1 -1
+1 -1 -1 0
+
+# Triangle metadata (cost, flags)
+TRIANGLE_METADATA
+0 1.0 0
+1 1.0 0
+
+END
