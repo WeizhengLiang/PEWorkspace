@@ -8,6 +8,8 @@
 #include "PrimeEngine/MemoryManagement/Handle.h"
 #include "PrimeEngine/PrimitiveTypes/PrimitiveTypes.h"
 #include "PrimeEngine/Math/Vector3.h"
+#include "PrimeEngine/Math/Vector4.h"
+#include "PrimeEngine/Math/Matrix4x4.h"
 #include "PrimeEngine/Utils/Array/Array.h"
 #include "../Events/Component.h"
 
@@ -190,12 +192,13 @@ struct NavmeshComponent : public Component
 	// ========================================================================
 
 	// Navmesh geometry
-	Array<Vector3> m_vertices;              // Shared vertex pool
+	Array<Vector3> m_vertices;              // Shared vertex pool (in world space after transform applied)
 	Array<NavmeshTriangle> m_triangles;     // Triangle soup with adjacency
 
 	// Metadata
 	char m_name[128];                       // Navmesh name (e.g., "ccontrollvl0")
 	PrimitiveTypes::Float32 m_version;      // File format version
+	Matrix4x4 m_transform;                  // Transform from object space to world space
 
 	// Debug rendering
 	bool m_debugRenderEnabled;              // Show navmesh in game?

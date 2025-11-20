@@ -7,6 +7,7 @@
 #include "Tank/ClientTank.h"
 #include "CharacterControl/Client/ClientSpaceShip.h"
 #include "PrimeEngine/Scene/NavmeshComponent.h"
+#include "PrimeEngine/Scene/RootSceneNode.h"
 
 using namespace PE::Components;
 using namespace PE::Events;
@@ -55,6 +56,14 @@ void ClientGameObjectManagerAddon::addDefaultComponents()
 		PEINFO("  Vertices: %d\n", pNavmesh->getVertexCount());
 		PEINFO("  Triangles: %d\n", pNavmesh->getTriangleCount());
 		PEINFO("=================================================================\n");
+
+		// Enable debug rendering
+		pNavmesh->setDebugRenderEnabled(true);
+
+		// Add to root scene node so it receives draw events
+		RootSceneNode::Instance()->addComponent(m_hNavmesh);
+
+		PEINFO("NAVMESH: Debug visualization enabled (green wireframe)\n");
 	}
 	else
 	{

@@ -544,6 +544,30 @@ def exportNavmesh( arg ):
     # Export the first navmesh found
     fnMesh, meshName = navmeshes[0]
 
+    # Get the transform node for the mesh
+    # Go back through selection to find the transform
+    itList2 = OpenMaya.MItSelectionList( selectionList, OpenMaya.MFn.kTransform )
+    transformMatrix = None
+    transformPath = None
+    while not itList2.isDone():
+        path = OpenMaya.MDagPath()
+        itList2.getDagPath( path )
+        fnDagNode = OpenMaya.MFnDagNode( path )
+
+        # Check if this transform contains our mesh
+        numChildren = fnDagNode.childCount()
+        for i in range( numChildren ):
+            child = fnDagNode.child( i )
+            if child == fnMesh.object():
+                # Found the transform for this mesh
+                fnTransform = OpenMaya.MFnTransform( path )
+                transformMatrix = fnTransform.transformationMatrix()
+                transformPath = path
+                break
+        if transformMatrix:
+            break
+        itList2.next()
+
     # Get navmesh name from filename
     navmeshName = os.path.splitext(os.path.basename(fileName))[0]
 
@@ -558,20 +582,56 @@ def exportNavmesh( arg ):
     f.write( 'NAVMESH %s\n' % navmeshName )
     f.write( 'VERSION 1.0\n\n' )
 
-    # Get vertex positions
+    # Write transform matrix (world transform of the navmesh object)
+    if transformMatrix:
+        f.write( 'TRANSFORM\n' )
+        for row in range(4):
+            for col in range(4):
+                val = transformMatrix(row, col)
+                # Flip Z axis elements for left-handed coordinate system
+                if col == 2 or row == 2:  # Z column or Z row
+                    if row != col:  # Don't flip diagonal
+                        val = -val
+                f.write( '%.6f ' % val )
+            f.write( '\n' )
+        f.write( '\n' )
+
+    # Get vertex positions in world space (navmesh needs world coords for pathfinding)
     points = OpenMaya.MPointArray()
     fnMesh.getPoints( points, OpenMaya.MSpace.kWorld )
 
     f.write( 'VERTEX_COUNT %d\n' % points.length() )
     f.write( 'VERTICES\n' )
+
+    # Query Maya's current linear unit setting and convert to meters
+    # Maya internal units are always in cm, but we need to convert to engine units
+    currentUnit = cmds.currentUnit(query=True, linear=True)
+
+    # Convert from Maya's current unit to engine units (meters)
+    if currentUnit == 'mm':
+        scale = 0.001  # mm to m
+    elif currentUnit == 'cm':
+        scale = 0.01   # cm to m (Maya default)
+    elif currentUnit == 'm':
+        scale = 1.0    # already in meters
+    elif currentUnit == 'km':
+        scale = 1000.0 # km to m
+    elif currentUnit == 'in':
+        scale = 0.0254 # inches to m
+    elif currentUnit == 'ft':
+        scale = 0.3048 # feet to m
+    else:
+        scale = 0.01   # fallback to cm
+        OpenMaya.MGlobal.displayWarning('Unknown linear unit: %s, using cm (0.01)' % currentUnit)
+
     for i in range( points.length() ):
         # Convert from Maya's Y-up right-handed to engine's coordinate system
         # Maya: Y-up, Z-forward, X-right
         # Engine: Y-up, Z-forward, X-right (same!)
         # But we need to flip Z for right-to-left handed conversion
-        x = points[i].x
-        y = points[i].y
-        z = -points[i].z  # Flip Z for left-handed
+        x = points[i].x * scale
+        y = points[i].y * scale
+        z = -points[i].z * scale  # Flip Z for left-handed
         f.write( '%.6f %.6f %.6f\n' % (x, y, z) )
 
     f.write( '\n' )

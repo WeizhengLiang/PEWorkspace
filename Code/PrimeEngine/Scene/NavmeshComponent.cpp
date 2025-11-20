@@ -10,6 +10,7 @@
 #include "PrimeEngine/Utils/PEString.h"
 #include "PrimeEngine/Lua/LuaEnvironment.h"
 #include "PrimeEngine/Scene/SceneNode.h"
+#include "PrimeEngine/Scene/DebugRenderer.h"
 
 // For debug output and string functions
 #include <stdio.h>
@@ -37,6 +38,7 @@ NavmeshComponent::NavmeshComponent(PE::GameContext &context, PE::MemoryArena are
 	, m_debugRenderEnabled(false)
 {
 	m_name[0] = '\0';
+	m_transform.loadIdentity();  // Initialize transform to identity
 }
 
 // ============================================================================
@@ -92,6 +94,25 @@ bool NavmeshComponent::loadFromFile(const char* filename, const char* package)
 		{
 			sscanf(token, "VERSION %f", &m_version);
 			PEINFO("NavmeshComponent: Version: %.1f\n", m_version);
+		}
+		else if (StringOps::startsswith(token, "TRANSFORM"))
+		{
+			// Read 4x4 transform matrix
+			PEINFO("NavmeshComponent: Reading transform matrix...\n");
+			m_transform.loadIdentity();  // Start with identity
+
+			for (int row = 0; row < 4; row++)
+			{
+				if (!reader.nextNonEmptyLine(line, 256))
+					break;
+
+				float m00, m01, m02, m03;
+				if (sscanf(line, "%f %f %f %f", &m00, &m01, &m02, &m03) == 4)
+				{
+					m_transform.setRow(Row4(m00, m01, m02, m03), row);
+				}
+			}
+			PEINFO("NavmeshComponent: Transform matrix loaded\n");
 		}
 		else if (StringOps::startsswith(token, "VERTEX_COUNT"))
 		{
@@ -218,6 +239,10 @@ bool NavmeshComponent::loadFromFile(const char* filename, const char* package)
 			break;
 		}
 	}
+
+	// Vertices are exported in world space, so no transform needed
+	// (The TRANSFORM section is still loaded for reference, but not applied)
+	PEINFO("NavmeshComponent: Vertices already in world space, no transform applied\n");
 
 	// Compute adjacency if not provided in file
 	if (!hasAdjacency)
@@ -435,9 +460,70 @@ void NavmeshComponent::getTriangleVertices(PrimitiveTypes::UInt32 triangleIndex,
 // ============================================================================
 void NavmeshComponent::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 {
-	// TODO: Implement debug visualization
-	// For now, just a placeholder
-	// We'll implement this after testing the loader works
+	if (!m_debugRenderEnabled)
+		return;
+
+	// Draw navmesh as wireframe using DebugRenderer
+	Events::Event_GATHER_DRAWCALLS *pDrawEvent = NULL;
+	pDrawEvent = (Events::Event_GATHER_DRAWCALLS *)(pEvt);
+
+	// Get debug renderer
+	Handle hDebugRenderer = DebugRenderer::Instance();
+	if (!hDebugRenderer.isValid())
+		return;
+
+	DebugRenderer *pDebugRenderer = hDebugRenderer.getObject<DebugRenderer>();
+
+	// Build line data for all triangles
+	// Format: [v0, color, v1, color, v1, color, v2, color, v2, color, v0, color] per triangle
+	Vector3 offset(0.0f, 0.05f, 0.0f);
+	Vector3 color(0.0f, 1.0f, 0.0f); // Green
+
+	// Each triangle = 3 edges = 6 points (3 lines * 2 points per line)
+	int numPoints = m_triangles.m_size * 6;
+	Vector3* lineData = (Vector3*)alloca(sizeof(Vector3) * numPoints * 2); // *2 for position + color per point
+
+	int pointIndex = 0;
+	for (PrimitiveTypes::UInt32 i = 0; i < m_triangles.m_size; i++)
+	{
+		const NavmeshTriangle& tri = const_cast<Array<NavmeshTriangle>&>(m_triangles)[i];
+
+		// Get triangle vertices
+		const Vector3& v0 = const_cast<Array<Vector3>&>(m_vertices)[tri.vertexIndices[0]];
+		const Vector3& v1 = const_cast<Array<Vector3>&>(m_vertices)[tri.vertexIndices[1]];
+		const Vector3& v2 = const_cast<Array<Vector3>&>(m_vertices)[tri.vertexIndices[2]];
+
+		// Edge 0: v0 -> v1
+		lineData[pointIndex++] = v0 + offset;
+		lineData[pointIndex++] = color;
+		lineData[pointIndex++] = v1 + offset;
+		lineData[pointIndex++] = color;
+
+		// Edge 1: v1 -> v2
+		lineData[pointIndex++] = v1 + offset;
+		lineData[pointIndex++] = color;
+		lineData[pointIndex++] = v2 + offset;
+		lineData[pointIndex++] = color;
+
+		// Edge 2: v2 -> v0
+		lineData[pointIndex++] = v2 + offset;
+		lineData[pointIndex++] = color;
+		lineData[pointIndex++] = v0 + offset;
+		lineData[pointIndex++] = color;
+	}
+
+	// Create line mesh with identity transform (vertices already in world space)
+	Matrix4x4 identityMatrix;
+	identityMatrix.loadIdentity();
+
+	pDebugRenderer->createLineMesh(
+		false,  // No transform (vertices already in world space)
+		identityMatrix,
+		&lineData[0].m_x,
+		numPoints,
+		0.0f,  // 0 = persistent (draw every frame)
+		1.0f   // Scale
+	);
 }
 
 }; // namespace Components
