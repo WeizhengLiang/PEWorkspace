@@ -234,9 +234,9 @@ Frame PEObject45_nazi_rep {
 		1.000000,0.000000,-0.000000,0.000000,0.000000,1.000000,-0.000000,0.000000,-0.000000,-0.000000,1.000000,0.000000,199.107586,0.000000,-0.000000,1.000000;;
 	}
 }
-Frame PEObject59_pPlane1 {
+Frame _PEObject59_pPlane_navmesh {
 	MetaScript {
-		"ccontrollvl0_navmesh.x_PEObject59_pPlan.lua"
+		"ccontrollvl0_navmesh.x__PEObject59_pPla.lua"
 	}
 	PEUUID {
 		0x4050cc8f, 0xc5cd11f0, 0xa783f43b, 0xd826328d
