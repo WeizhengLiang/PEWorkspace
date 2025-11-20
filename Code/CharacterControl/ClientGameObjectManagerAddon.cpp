@@ -6,6 +6,7 @@
 #include "WayPoint.h"
 #include "Tank/ClientTank.h"
 #include "CharacterControl/Client/ClientSpaceShip.h"
+#include "PrimeEngine/Scene/NavmeshComponent.h"
 
 using namespace PE::Components;
 using namespace PE::Events;
@@ -28,6 +29,65 @@ void ClientGameObjectManagerAddon::addDefaultComponents()
 	PE_REGISTER_EVENT_HANDLER(PE::Events::Event_SERVER_CLIENT_CONNECTION_ACK, ClientGameObjectManagerAddon::do_SERVER_CLIENT_CONNECTION_ACK);
 
 	PE_REGISTER_EVENT_HANDLER(Event_MoveTank_S_to_C, ClientGameObjectManagerAddon::do_MoveTank);
+
+	// ========================================================================
+	// TEST: Load navmesh
+	// ========================================================================
+	PEINFO("=================================================================\n");
+	PEINFO("NAVMESH TEST: Loading test_simple.navmesh...\n");
+	PEINFO("=================================================================\n");
+
+	// Create navmesh component
+	m_hNavmesh = PE::Handle("NAVMESH", sizeof(PE::Components::NavmeshComponent));
+	PE::Components::NavmeshComponent* pNavmesh =
+		new(m_hNavmesh) PE::Components::NavmeshComponent(*m_pContext, m_arena, m_hNavmesh);
+	pNavmesh->addDefaultComponents();
+
+	// Load from file
+	bool success = pNavmesh->loadFromFile("test_simple.navmesh", "CharacterControl");
+
+	if (success)
+	{
+		PEINFO("=================================================================\n");
+		PEINFO("NAVMESH TEST: SUCCESS!\n");
+		PEINFO("  Loaded navmesh: %s\n", pNavmesh->getName());
+		PEINFO("  Vertices: %d\n", pNavmesh->getVertexCount());
+		PEINFO("  Triangles: %d\n", pNavmesh->getTriangleCount());
+		PEINFO("=================================================================\n");
+
+		// Test spatial query
+		Vector3 testPos1(5.0f, 0.0f, 5.0f);  // Center of test navmesh
+		Vector3 testPos2(0.0f, 0.0f, 0.0f);  // Corner vertex
+		Vector3 testPos3(-5.0f, 0.0f, -5.0f); // Outside navmesh
+
+		int tri1 = pNavmesh->findTriangleContainingPoint(testPos1);
+		int tri2 = pNavmesh->findTriangleContainingPoint(testPos2);
+		int tri3 = pNavmesh->findTriangleContainingPoint(testPos3);
+
+		PEINFO("NAVMESH TEST: Spatial Queries:\n");
+		PEINFO("  Point (5, 0, 5) is in triangle: %d %s\n", tri1, (tri1 >= 0 ? "[OK]" : "[NOT ON NAVMESH]"));
+		PEINFO("  Point (0, 0, 0) is in triangle: %d %s\n", tri2, (tri2 >= 0 ? "[OK]" : "[NOT ON NAVMESH]"));
+		PEINFO("  Point (-5, 0, -5) is in triangle: %d %s\n", tri3, (tri3 >= 0 ? "[OK - SHOULD BE -1!]" : "[OK - CORRECTLY OUTSIDE]"));
+
+		// Test triangle access
+		if (tri1 >= 0)
+		{
+			const PE::Components::NavmeshTriangle& tri = pNavmesh->getTriangle(tri1);
+			PEINFO("  Triangle %d info:\n", tri1);
+			PEINFO("    Vertices: [%d, %d, %d]\n", tri.vertexIndices[0], tri.vertexIndices[1], tri.vertexIndices[2]);
+			PEINFO("    Neighbors: [%d, %d, %d]\n", tri.neighbors[0], tri.neighbors[1], tri.neighbors[2]);
+			PEINFO("    Center: (%.2f, %.2f, %.2f)\n", tri.center.m_x, tri.center.m_y, tri.center.m_z);
+			PEINFO("    Area: %.2f\n", tri.area);
+		}
+
+		PEINFO("=================================================================\n");
+	}
+	else
+	{
+		PEINFO("=================================================================\n");
+		PEINFO("NAVMESH TEST: FAILED TO LOAD!\n");
+		PEINFO("=================================================================\n");
+	}
 }
 
 void ClientGameObjectManagerAddon::do_CreateSoldierNPC(PE::Events::Event *pEvt)

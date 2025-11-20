@@ -1,0 +1,444 @@
+#define NOMINMAX
+#include "NavmeshComponent.h"
+
+// API Abstraction
+#include "PrimeEngine/APIAbstraction/APIAbstractionDefines.h"
+
+// Inter-Engine includes
+#include "PrimeEngine/FileSystem/FileReader.h"
+#include "PrimeEngine/Utils/StringOps.h"
+#include "PrimeEngine/Utils/PEString.h"
+#include "PrimeEngine/Lua/LuaEnvironment.h"
+#include "PrimeEngine/Scene/SceneNode.h"
+
+// For debug output and string functions
+#include <stdio.h>
+#include <string.h>
+
+// Helper: Check if string contains substring (StringOps doesn't have this)
+static bool stringContains(const char* str, const char* substr)
+{
+	return strstr(str, substr) != NULL;
+}
+
+namespace PE {
+namespace Components {
+
+PE_IMPLEMENT_CLASS1(NavmeshComponent, Component);
+
+// ============================================================================
+// Constructor
+// ============================================================================
+NavmeshComponent::NavmeshComponent(PE::GameContext &context, PE::MemoryArena arena, Handle hMyself)
+	: Component(context, arena, hMyself)
+	, m_vertices(context, arena)
+	, m_triangles(context, arena)
+	, m_version(1.0f)
+	, m_debugRenderEnabled(false)
+{
+	m_name[0] = '\0';
+}
+
+// ============================================================================
+// Component Interface
+// ============================================================================
+void NavmeshComponent::addDefaultComponents()
+{
+	Component::addDefaultComponents();
+
+	// Register for debug rendering events
+	PE_REGISTER_EVENT_HANDLER(Events::Event_GATHER_DRAWCALLS, NavmeshComponent::do_GATHER_DRAWCALLS);
+}
+
+// ============================================================================
+// Loading & Initialization
+// ============================================================================
+bool NavmeshComponent::loadFromFile(const char* filename, const char* package)
+{
+	PEINFO("NavmeshComponent: Loading navmesh from file: %s (package: %s)\n", filename, package);
+
+	// Generate full file path using Prime Engine's path system
+	char fullPath[256];
+	PEString::generatePathname(*m_pContext, filename, package, "Levels", fullPath, 256);
+
+	PEINFO("NavmeshComponent: Full path: %s\n", fullPath);
+
+	// Open file
+	FileReader reader(fullPath);
+
+	// Read file line by line
+	char line[256];
+	bool hasAdjacency = false;
+
+	while (reader.nextNonEmptyLine(line, 256))
+	{
+		// Skip comments
+		if (line[0] == '#')
+			continue;
+
+		// Trim whitespace
+		char* token = line;
+		while (*token == ' ' || *token == '\t')
+			token++;
+
+		// Parse keywords
+		if (StringOps::startsswith(token, "NAVMESH"))
+		{
+			// Extract navmesh name
+			sscanf(token, "NAVMESH %s", m_name);
+			PEINFO("NavmeshComponent: Navmesh name: %s\n", m_name);
+		}
+		else if (StringOps::startsswith(token, "VERSION"))
+		{
+			sscanf(token, "VERSION %f", &m_version);
+			PEINFO("NavmeshComponent: Version: %.1f\n", m_version);
+		}
+		else if (StringOps::startsswith(token, "VERTEX_COUNT"))
+		{
+			int vertexCount = 0;
+			sscanf(token, "VERTEX_COUNT %d", &vertexCount);
+			PEINFO("NavmeshComponent: Vertex count: %d\n", vertexCount);
+
+			// Reserve space
+			m_vertices.reset(vertexCount);
+		}
+		else if (StringOps::startsswith(token, "VERTICES"))
+		{
+			// Read vertex data
+			PEINFO("NavmeshComponent: Reading vertices...\n");
+
+			int count = 0;
+			while (reader.nextNonEmptyLine(line, 256))
+			{
+				// Stop if we hit next section
+				if (line[0] == '#' || stringContains(line, "TRIANGLE"))
+					break;
+
+				// Parse vertex position
+				Vector3 v;
+				if (sscanf(line, "%f %f %f", &v.m_x, &v.m_y, &v.m_z) == 3)
+				{
+					m_vertices.add(v);
+					count++;
+				}
+			}
+
+			PEINFO("NavmeshComponent: Loaded %d vertices\n", count);
+
+			// We just read a line that might be TRIANGLE_COUNT, check it
+			if (stringContains(line, "TRIANGLE_COUNT"))
+			{
+				int triangleCount = 0;
+				sscanf(line, "TRIANGLE_COUNT %d", &triangleCount);
+				PEINFO("NavmeshComponent: Triangle count: %d\n", triangleCount);
+
+				// Reserve space
+				m_triangles.reset(triangleCount);
+			}
+		}
+		else if (StringOps::startsswith(token, "TRIANGLE_COUNT"))
+		{
+			int triangleCount = 0;
+			sscanf(token, "TRIANGLE_COUNT %d", &triangleCount);
+			PEINFO("NavmeshComponent: Triangle count: %d\n", triangleCount);
+
+			// Reserve space
+			m_triangles.reset(triangleCount);
+		}
+		else if (StringOps::startsswith(token, "TRIANGLES"))
+		{
+			// Read triangle indices
+			PEINFO("NavmeshComponent: Reading triangles...\n");
+
+			int count = 0;
+			while (reader.nextNonEmptyLine(line, 256))
+			{
+				// Stop if we hit next section
+				if (line[0] == '#' || stringContains(line, "ADJACENCY") || stringContains(line, "TRIANGLE_METADATA") || stringContains(line, "END"))
+					break;
+
+				// Parse triangle indices
+				NavmeshTriangle tri;
+				if (sscanf(line, "%u %u %u", &tri.vertexIndices[0], &tri.vertexIndices[1], &tri.vertexIndices[2]) == 3)
+				{
+					m_triangles.add(tri);
+					count++;
+				}
+			}
+
+			PEINFO("NavmeshComponent: Loaded %d triangles\n", count);
+
+			// Check what section we just read
+			if (stringContains(line, "ADJACENCY"))
+			{
+				hasAdjacency = true;
+
+				// Read adjacency data
+				PEINFO("NavmeshComponent: Reading adjacency...\n");
+
+				int adjCount = 0;
+				while (reader.nextNonEmptyLine(line, 256))
+				{
+					// Stop if we hit next section
+					if (line[0] == '#' || stringContains(line, "TRIANGLE_METADATA") || stringContains(line, "END"))
+						break;
+
+					// Parse adjacency
+					if (adjCount < m_triangles.m_size)
+					{
+						int triIndex, n0, n1, n2;
+						// Try format: "triIndex n0 n1 n2"
+						if (sscanf(line, "%d %d %d %d", &triIndex, &n0, &n1, &n2) == 4)
+						{
+							if (triIndex < (int)m_triangles.m_size)
+							{
+								m_triangles[triIndex].neighbors[0] = n0;
+								m_triangles[triIndex].neighbors[1] = n1;
+								m_triangles[triIndex].neighbors[2] = n2;
+								adjCount++;
+							}
+						}
+						// Try simpler format: "n0 n1 n2" (implicit triangle index)
+						else if (sscanf(line, "%d %d %d", &n0, &n1, &n2) == 3)
+						{
+							m_triangles[adjCount].neighbors[0] = n0;
+							m_triangles[adjCount].neighbors[1] = n1;
+							m_triangles[adjCount].neighbors[2] = n2;
+							adjCount++;
+						}
+					}
+				}
+
+				PEINFO("NavmeshComponent: Loaded adjacency for %d triangles\n", adjCount);
+			}
+		}
+		else if (StringOps::startsswith(token, "END"))
+		{
+			// End of file
+			break;
+		}
+	}
+
+	// Compute adjacency if not provided in file
+	if (!hasAdjacency)
+	{
+		PEINFO("NavmeshComponent: No adjacency data in file, computing...\n");
+		computeAdjacency();
+	}
+
+	// Compute derived data (centers, areas, etc.)
+	computeDerivedData();
+
+	PEINFO("NavmeshComponent: Loading complete! %d vertices, %d triangles\n",
+		m_vertices.m_size, m_triangles.m_size);
+
+	return true;
+}
+
+void NavmeshComponent::computeDerivedData()
+{
+	PEINFO("NavmeshComponent: Computing derived data...\n");
+
+	for (PrimitiveTypes::UInt32 i = 0; i < m_triangles.m_size; i++)
+	{
+		NavmeshTriangle& tri = m_triangles[i];
+
+		// Get triangle vertices
+		const Vector3& v0 = m_vertices[tri.vertexIndices[0]];
+		const Vector3& v1 = m_vertices[tri.vertexIndices[1]];
+		const Vector3& v2 = m_vertices[tri.vertexIndices[2]];
+
+		// Compute center (centroid)
+		tri.center = (v0 + v1 + v2) * (1.0f / 3.0f);
+
+		// Compute area using cross product
+		// Area = 0.5 * ||AB x AC||
+		Vector3 AB = v1 - v0;
+		Vector3 AC = v2 - v0;
+		Vector3 cross = AB.crossProduct(AC);
+		tri.area = cross.length() * 0.5f;
+	}
+
+	PEINFO("NavmeshComponent: Derived data computed\n");
+}
+
+void NavmeshComponent::computeAdjacency()
+{
+	PEINFO("NavmeshComponent: Computing adjacency graph...\n");
+
+	// For each triangle, find its neighbors
+	for (PrimitiveTypes::UInt32 i = 0; i < m_triangles.m_size; i++)
+	{
+		NavmeshTriangle& tri = m_triangles[i];
+
+		// Check each edge of this triangle
+		// Edge convention: Edge N is opposite vertex N
+		//   Edge 0 (opposite v0): connects v1 to v2
+		//   Edge 1 (opposite v1): connects v2 to v0
+		//   Edge 2 (opposite v2): connects v0 to v1
+		for (int edge = 0; edge < 3; edge++)
+		{
+			// Get the two vertices that form this edge
+			PrimitiveTypes::UInt32 edgeV0, edgeV1;
+
+			if (edge == 0)
+			{
+				// Edge 0: v1 to v2
+				edgeV0 = tri.vertexIndices[1];
+				edgeV1 = tri.vertexIndices[2];
+			}
+			else if (edge == 1)
+			{
+				// Edge 1: v2 to v0
+				edgeV0 = tri.vertexIndices[2];
+				edgeV1 = tri.vertexIndices[0];
+			}
+			else // edge == 2
+			{
+				// Edge 2: v0 to v1
+				edgeV0 = tri.vertexIndices[0];
+				edgeV1 = tri.vertexIndices[1];
+			}
+
+			// Search for another triangle that shares these 2 vertices
+			bool foundNeighbor = false;
+			for (PrimitiveTypes::UInt32 j = 0; j < m_triangles.m_size; j++)
+			{
+				if (i == j)
+					continue; // Don't compare triangle to itself
+
+				const NavmeshTriangle& other = m_triangles[j];
+
+				// Check if 'other' contains both edgeV0 and edgeV1
+				if (other.hasEdge(edgeV0, edgeV1))
+				{
+					tri.neighbors[edge] = j; // Found neighbor!
+					foundNeighbor = true;
+					break;
+				}
+			}
+
+			// If no neighbor found, mark as boundary (-1)
+			if (!foundNeighbor)
+			{
+				tri.neighbors[edge] = -1;
+			}
+		}
+	}
+
+	PEINFO("NavmeshComponent: Adjacency computed\n");
+}
+
+// ============================================================================
+// Spatial Queries
+// ============================================================================
+PrimitiveTypes::Int32 NavmeshComponent::findTriangleContainingPoint(const Vector3& position) const
+{
+	// Brute-force search (fine for small navmeshes < 1000 triangles)
+	// For larger navmeshes, use spatial acceleration (grid, BVH)
+	for (PrimitiveTypes::UInt32 i = 0; i < m_triangles.m_size; i++)
+	{
+		if (isPointInTriangle(position, i))
+		{
+			return i;
+		}
+	}
+
+	return -1; // Not found
+}
+
+PrimitiveTypes::Int32 NavmeshComponent::findNearestTriangle(const Vector3& position) const
+{
+	PrimitiveTypes::Int32 nearestIndex = -1;
+	PrimitiveTypes::Float32 nearestDist = FLT_MAX;
+
+	for (PrimitiveTypes::UInt32 i = 0; i < m_triangles.m_size; i++)
+	{
+		PrimitiveTypes::Float32 dist = getDistanceToTriangle(position, i);
+		if (dist < nearestDist)
+		{
+			nearestDist = dist;
+			nearestIndex = i;
+		}
+	}
+
+	return nearestIndex;
+}
+
+bool NavmeshComponent::isPointInTriangle(const Vector3& point, PrimitiveTypes::UInt32 triangleIndex) const
+{
+	if (triangleIndex >= m_triangles.m_size)
+		return false;
+
+	// Array doesn't have const operator[], cast away const (safe for reading)
+	const NavmeshTriangle& tri = const_cast<Array<NavmeshTriangle>&>(m_triangles)[triangleIndex];
+
+	// Get triangle vertices
+	const Vector3& v0 = const_cast<Array<Vector3>&>(m_vertices)[tri.vertexIndices[0]];
+	const Vector3& v1 = const_cast<Array<Vector3>&>(m_vertices)[tri.vertexIndices[1]];
+	const Vector3& v2 = const_cast<Array<Vector3>&>(m_vertices)[tri.vertexIndices[2]];
+
+	// Use barycentric coordinates (2D test on XZ plane)
+	// Point P is inside triangle ABC if:
+	//   Barycentric coords (u, v, w) all >= 0 and u + v + w = 1
+
+	// Compute vectors
+	Vector3 v0v1 = v1 - v0;
+	Vector3 v0v2 = v2 - v0;
+	Vector3 v0p = point - v0;
+
+	// Compute dot products (using XZ plane, ignoring Y)
+	float dot00 = v0v2.m_x * v0v2.m_x + v0v2.m_z * v0v2.m_z;
+	float dot01 = v0v2.m_x * v0v1.m_x + v0v2.m_z * v0v1.m_z;
+	float dot02 = v0v2.m_x * v0p.m_x + v0v2.m_z * v0p.m_z;
+	float dot11 = v0v1.m_x * v0v1.m_x + v0v1.m_z * v0v1.m_z;
+	float dot12 = v0v1.m_x * v0p.m_x + v0v1.m_z * v0p.m_z;
+
+	// Compute barycentric coordinates
+	float invDenom = 1.0f / (dot00 * dot11 - dot01 * dot01);
+	float u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+	float v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+
+	// Check if point is inside
+	return (u >= 0.0f) && (v >= 0.0f) && (u + v <= 1.0f);
+}
+
+PrimitiveTypes::Float32 NavmeshComponent::getDistanceToTriangle(const Vector3& point, PrimitiveTypes::UInt32 triangleIndex) const
+{
+	if (triangleIndex >= m_triangles.m_size)
+		return FLT_MAX;
+
+	// Simple implementation: distance to triangle center
+	// For better accuracy, compute distance to closest point on triangle
+	const NavmeshTriangle& tri = const_cast<Array<NavmeshTriangle>&>(m_triangles)[triangleIndex];
+	Vector3 diff = point - tri.center;
+	return diff.length();
+}
+
+// ============================================================================
+// Accessors
+// ============================================================================
+void NavmeshComponent::getTriangleVertices(PrimitiveTypes::UInt32 triangleIndex, Vector3 outVerts[3]) const
+{
+	if (triangleIndex >= m_triangles.m_size)
+		return;
+
+	const NavmeshTriangle& tri = const_cast<Array<NavmeshTriangle>&>(m_triangles)[triangleIndex];
+	Array<Vector3>& verts = const_cast<Array<Vector3>&>(m_vertices);
+	outVerts[0] = verts[tri.vertexIndices[0]];
+	outVerts[1] = verts[tri.vertexIndices[1]];
+	outVerts[2] = verts[tri.vertexIndices[2]];
+}
+
+// ============================================================================
+// Debug Rendering
+// ============================================================================
+void NavmeshComponent::do_GATHER_DRAWCALLS(Events::Event *pEvt)
+{
+	// TODO: Implement debug visualization
+	// For now, just a placeholder
+	// We'll implement this after testing the loader works
+}
+
+}; // namespace Components
+}; // namespace PE

@@ -55,6 +55,9 @@ struct ClientGameObjectManagerAddon : public GameObjectManagerAddon
 	// waypoint search
 	WayPoint *getWayPoint(const char *name);
 	SoldierNPC *getFirstTargetableSoldierObject();
+
+	// Navmesh for pathfinding
+	PE::Handle m_hNavmesh;
 };
 
 
