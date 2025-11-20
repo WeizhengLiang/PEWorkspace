@@ -290,11 +290,12 @@ def UI():
     if cmds.windowPref( "cvxporterUI", exists=True ):
         cmds.windowPref( "cvxporterUI", remove=True )
 
-    window = cmds.window( "cvxporterUI", title="PrimeEngine Exporter", widthHeight=(550, 470) )
+    window = cmds.window( "cvxporterUI", title="PrimeEngine Exporter", widthHeight=(550, 500) )
     cmds.columnLayout( adjustableColumn=True, columnOffset=("both", 4) )
     cmds.button( "exportAllButton", label="Export All", command=exportAll )
     cmds.button( "exportSelectedButton", label="Export Selected", command=exportSelected )
     cmds.button( "exportLevelButton", label="Export Level", command=exportLevel )
+    cmds.button( "exportNavmeshButton", label="Export Navmesh", command=exportNavmesh )
     cmds.button( "saveProfileButton", label="Save Export Profile", command=saveProfile )
     cmds.button( "loadProfileButton", label="Load Export Profile", command=loadProfile )
     cmds.text( label="" )
@@ -480,6 +481,137 @@ def exportLevel( arg ):
     Called by the UI to export all objects as level.
     """
     doExport( True, True )
+
+def exportNavmesh( arg ):
+    """
+    Called by the UI to export navmesh from selected mesh.
+    Exports mesh with 'navmesh' in name to .navmesh file format.
+
+    NOTE: Navmesh files are exported directly to AssetsOut, unlike .x files.
+    This is because .navmesh is already in final format and doesn't need XParser processing.
+    The engine loads navmesh files from: AssetsOut/<Package>/Levels/
+    """
+    targetPackage = cmds.textFieldGrp( "targetPackage", query=True, text=True )
+
+    # Get file path from user
+    # NOTE: Using AssetsOut instead of AssetsIn because .navmesh is final format
+    navmeshDirectory = os.environ["PYENGINE_WORKSPACE_DIR"] + "\\\\AssetsOut\\\\" + targetPackage + "\\\\Levels\\\\"
+
+    # Create directory if it doesn't exist
+    if not os.path.exists(navmeshDirectory):
+        os.makedirs(navmeshDirectory)
+
+    mask = navmeshDirectory + '*.navmesh'
+    fileName = cmds.fileDialog( mode=1, directoryMask=mask )
+    if fileName == '':
+        return None
+    if not fileName.endswith( '.navmesh' ):
+        fileName += '.navmesh'
+
+    # Find meshes with 'navmesh' in name
+    navmeshes = []
+    selectionList = OpenMaya.MSelectionList()
+    OpenMaya.MGlobal.getActiveSelectionList( selectionList )
+
+    if selectionList.isEmpty():
+        OpenMaya.MGlobal.displayWarning( 'Please select a navmesh object (mesh with "navmesh" in name)' )
+        return None
+
+    # Iterate through selection
+    itList = OpenMaya.MItSelectionList( selectionList, OpenMaya.MFn.kTransform )
+    while not itList.isDone():
+        path = OpenMaya.MDagPath()
+        itList.getDagPath( path )
+        fnDagNode = OpenMaya.MFnDagNode( path )
+
+        # Check children for meshes
+        numChildren = fnDagNode.childCount()
+        for i in range( numChildren ):
+            child = fnDagNode.child( i )
+            path.push( child )
+            if path.node().apiType() == OpenMaya.MFn.kMesh:
+                fnMesh = OpenMaya.MFnMesh( path )
+                meshName = fnMesh.partialPathName()
+                if 'navmesh' in meshName.lower():
+                    navmeshes.append( (fnMesh, meshName) )
+            path.pop()
+        itList.next()
+
+    if len(navmeshes) == 0:
+        OpenMaya.MGlobal.displayWarning( 'No mesh with "navmesh" in name found in selection' )
+        return None
+
+    # Export the first navmesh found
+    fnMesh, meshName = navmeshes[0]
+
+    # Get navmesh name from filename
+    navmeshName = os.path.splitext(os.path.basename(fileName))[0]
+
+    # Open file for writing
+    f = open( fileName, 'w' )
+
+    # Write header
+    f.write( '# Navmesh exported from Maya\n' )
+    f.write( '# Mesh: %s\n' % meshName )
+    f.write( '# Package: %s\n\n' % targetPackage )
+
+    f.write( 'NAVMESH %s\n' % navmeshName )
+    f.write( 'VERSION 1.0\n\n' )
+
+    # Get vertex positions
+    points = OpenMaya.MPointArray()
+    fnMesh.getPoints( points, OpenMaya.MSpace.kWorld )
+
+    f.write( 'VERTEX_COUNT %d\n' % points.length() )
+    f.write( 'VERTICES\n' )
+    for i in range( points.length() ):
+        # Convert from Maya's Y-up right-handed to engine's coordinate system
+        # Maya: Y-up, Z-forward, X-right
+        # Engine: Y-up, Z-forward, X-right (same!)
+        # But we need to flip Z for right-to-left handed conversion
+        x = points[i].x
+        y = points[i].y
+        z = -points[i].z  # Flip Z for left-handed
+        f.write( '%.6f %.6f %.6f\n' % (x, y, z) )
+
+    f.write( '\n' )
+
+    # Get triangle indices
+    triangleCounts = OpenMaya.MIntArray()
+    triangleVertices = OpenMaya.MIntArray()
+    fnMesh.getTriangles( triangleCounts, triangleVertices )
+
+    # Count total triangles
+    numTriangles = 0
+    for i in range( triangleCounts.length() ):
+        numTriangles += triangleCounts[i]
+
+    f.write( 'TRIANGLE_COUNT %d\n' % numTriangles )
+    f.write( 'TRIANGLES\n' )
+
+    # Write triangles
+    triIndex = 0
+    for faceIndex in range( triangleCounts.length() ):
+        numTrisInFace = triangleCounts[faceIndex]
+        for t in range( numTrisInFace ):
+            v0 = triangleVertices[triIndex * 3 + 0]
+            v1 = triangleVertices[triIndex * 3 + 1]
+            v2 = triangleVertices[triIndex * 3 + 2]
+            f.write( '%d %d %d\n' % (v0, v1, v2) )
+            triIndex += 1
+
+    f.write( '\n' )
+    f.write( 'END\n' )
+
+    f.flush()
+    f.close()
+
+    OpenMaya.MGlobal.displayInfo( 'Navmesh exported successfully to: %s' % fileName )
+    OpenMaya.MGlobal.displayInfo( '  Vertices: %d' % points.length() )
+    OpenMaya.MGlobal.displayInfo( '  Triangles: %d' % numTriangles )
+
+    return fileName
+
 def saveProfile( arg ):
     """
     Called by the UI to save export profile.
