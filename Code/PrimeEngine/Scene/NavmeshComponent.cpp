@@ -39,11 +39,13 @@ NavmeshComponent::NavmeshComponent(PE::GameContext &context, PE::MemoryArena are
 	, m_vertices(context, arena)
 	, m_triangles(context, arena)
 	, m_debugPath(context, arena)
+	, m_debugRawPath(context, arena)
 	, m_triangleBlocked(context, arena)
 	, m_activeObstacles(context, arena)
 	, m_version(1.0f)
 	, m_debugRenderEnabled(false)
 	, m_debugPathEnabled(false)
+	, m_debugRawPathEnabled(false)
 	, m_navmeshMin(FLT_MAX, FLT_MAX, FLT_MAX)
 	, m_navmeshMax(-FLT_MAX, -FLT_MAX, -FLT_MAX)
 	, m_hasCornerData(false)
@@ -641,9 +643,9 @@ void NavmeshComponent::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 	if (m_debugPathEnabled && m_debugPath.m_size > 1)
 	{
 		// Draw path as connected line segments
-		// Color: Yellow for visibility
+		// Color: Red for smoothed path
 		Vector3 pathOffset(0.0f, 0.1f, 0.0f); // Slightly higher than navmesh
-		Vector3 pathColor(1.0f, 1.0f, 0.0f); // Yellow
+		Vector3 pathColor(1.0f, 0.0f, 0.0f); // Red
 
 		// Each segment = 2 points (start + end)
 		// We need m_debugPath.m_size - 1 segments
@@ -671,6 +673,37 @@ void NavmeshComponent::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 			numPathPoints,
 			0.0f,  // Persistent
 			1.0f   // Scale
+		);
+	}
+
+	if (m_debugRawPathEnabled && m_debugRawPath.m_size > 1)
+	{
+		Vector3 rawOffset(0.0f, 0.08f, 0.0f);
+		Vector3 rawColor(1.0f, 1.0f, 0.0f); // Yellow
+
+		int numSegments = m_debugRawPath.m_size - 1;
+		int numPathPoints = numSegments * 2;
+		Vector3* pathLineData = (Vector3*)alloca(sizeof(Vector3) * numPathPoints * 2);
+
+		int pathPointIndex = 0;
+		for (PrimitiveTypes::UInt32 i = 0; i < m_debugRawPath.m_size - 1; ++i)
+		{
+			const Vector3& start = const_cast<Array<Vector3>&>(m_debugRawPath)[i];
+			const Vector3& end = const_cast<Array<Vector3>&>(m_debugRawPath)[i + 1];
+
+			pathLineData[pathPointIndex++] = start + rawOffset;
+			pathLineData[pathPointIndex++] = rawColor;
+			pathLineData[pathPointIndex++] = end + rawOffset;
+			pathLineData[pathPointIndex++] = rawColor;
+		}
+
+		pDebugRenderer->createLineMesh(
+			false,
+			identityMatrix,
+			&pathLineData[0].m_x,
+			numPathPoints,
+			0.0f,
+			1.0f
 		);
 	}
 }
@@ -872,18 +905,13 @@ bool NavmeshComponent::findPath(const Vector3& startPos, const Vector3& endPos, 
 		return false;
 	}
 
+	// Build jagged raw path for debugging
+	Array<Vector3> rawPath(*m_pContext, m_arena, trianglePath.m_size + 2);
+	trianglePathToRawWaypoints(trianglePath, startPos, endPos, rawPath);
+	setDebugRawPath(rawPath);
+
 	// Convert triangle path to waypoints
-	trianglePathToWaypoints(trianglePath, outPath);
-
-	// Add start and end positions as first and last waypoints
-	if (outPath.m_size > 0)
-	{
-		// Replace first waypoint with actual start position
-		outPath[0] = startPos;
-
-		// Replace last waypoint with actual end position
-		outPath[outPath.m_size - 1] = endPos;
-	}
+	trianglePathToWaypoints(trianglePath, startPos, endPos, outPath);
 
 	PEINFO("NavmeshComponent::findPath: Found path with %d waypoints\n", outPath.m_size);
 	return true;
@@ -1054,17 +1082,188 @@ bool NavmeshComponent::findTrianglePath(PrimitiveTypes::Int32 startTriIndex, Pri
 	return false;
 }
 
-void NavmeshComponent::trianglePathToWaypoints(const Array<PrimitiveTypes::UInt32>& trianglePath, Array<Vector3>& outWaypoints)
+void NavmeshComponent::trianglePathToWaypoints(const Array<PrimitiveTypes::UInt32>& trianglePath, const Vector3 &startPos, const Vector3 &endPos, Array<Vector3>& outWaypoints)
 {
-	outWaypoints.reset(trianglePath.m_size);
-
-	for (PrimitiveTypes::UInt32 i = 0; i < trianglePath.m_size; i++)
+	if (trianglePath.m_size == 0)
 	{
-		// Cast away const since Array doesn't have const operator[]
+		outWaypoints.reset(2);
+		outWaypoints.add(startPos);
+		outWaypoints.add(endPos);
+		return;
+	}
+
+	Array<Vector3> portalLeft(*m_pContext, m_arena, trianglePath.m_size + 2);
+	Array<Vector3> portalRight(*m_pContext, m_arena, trianglePath.m_size + 2);
+
+	portalLeft.add(startPos);
+	portalRight.add(startPos);
+
+	for (PrimitiveTypes::UInt32 i = 0; i < trianglePath.m_size - 1; ++i)
+	{
+		PrimitiveTypes::UInt32 triA = const_cast<Array<PrimitiveTypes::UInt32>&>(trianglePath)[i];
+		PrimitiveTypes::UInt32 triB = const_cast<Array<PrimitiveTypes::UInt32>&>(trianglePath)[i + 1];
+		Vector3 leftPt, rightPt;
+		computePortalPoints(triA, triB, leftPt, rightPt);
+		portalLeft.add(leftPt);
+		portalRight.add(rightPt);
+	}
+
+	portalLeft.add(endPos);
+	portalRight.add(endPos);
+
+	Array<Vector3> &portalLeftRef = portalLeft;
+	Array<Vector3> &portalRightRef = portalRight;
+
+	outWaypoints.reset(portalLeft.m_size);
+	outWaypoints.add(startPos);
+
+	Vector3 apex = startPos;
+	Vector3 left = portalLeftRef.getByIndexUnchecked(1);
+	Vector3 right = portalRightRef.getByIndexUnchecked(1);
+	PrimitiveTypes::UInt32 apexIndex = 0;
+	PrimitiveTypes::UInt32 leftIndex = 1;
+	PrimitiveTypes::UInt32 rightIndex = 1;
+
+	for (PrimitiveTypes::UInt32 i = 1; i < portalLeft.m_size; ++i)
+	{
+		Vector3 newLeft = portalLeftRef.getByIndexUnchecked(i);
+		Vector3 newRight = portalRightRef.getByIndexUnchecked(i);
+
+		// Update right
+		if (triArea2(apex, right, newRight) <= 0.0f)
+		{
+			if (apex == right || triArea2(apex, left, newRight) > 0.0f)
+			{
+				right = newRight;
+				rightIndex = i;
+			}
+			else
+			{
+				outWaypoints.add(left);
+				apex = left;
+				apexIndex = leftIndex;
+				left = apex;
+				right = apex;
+				leftIndex = apexIndex;
+				rightIndex = apexIndex;
+				i = apexIndex;
+				continue;
+			}
+		}
+
+		// Update left
+		if (triArea2(apex, left, newLeft) >= 0.0f)
+		{
+			if (apex == left || triArea2(apex, right, newLeft) < 0.0f)
+			{
+				left = newLeft;
+				leftIndex = i;
+			}
+			else
+			{
+				outWaypoints.add(right);
+				apex = right;
+				apexIndex = rightIndex;
+				left = apex;
+				right = apex;
+				leftIndex = apexIndex;
+				rightIndex = apexIndex;
+				i = apexIndex;
+				continue;
+			}
+		}
+	}
+
+	outWaypoints.add(endPos);
+}
+
+void NavmeshComponent::trianglePathToRawWaypoints(const Array<PrimitiveTypes::UInt32>& trianglePath, const Vector3 &startPos, const Vector3 &endPos, Array<Vector3>& outWaypoints)
+{
+	outWaypoints.reset(trianglePath.m_size + 2);
+	outWaypoints.add(startPos);
+
+	for (PrimitiveTypes::UInt32 i = 0; i < trianglePath.m_size; ++i)
+	{
 		PrimitiveTypes::UInt32 triIndex = const_cast<Array<PrimitiveTypes::UInt32>&>(trianglePath)[i];
-		const NavmeshTriangle& tri = m_triangles[triIndex];
+		const NavmeshTriangle &tri = const_cast<Array<NavmeshTriangle>&>(m_triangles)[triIndex];
 		outWaypoints.add(tri.center);
 	}
+
+	outWaypoints.add(endPos);
+}
+
+void NavmeshComponent::computePortalPoints(PrimitiveTypes::UInt32 triIndexA, PrimitiveTypes::UInt32 triIndexB, Vector3 &outLeft, Vector3 &outRight) const
+{
+	Array<NavmeshTriangle> &tris = const_cast<Array<NavmeshTriangle>&>(m_triangles);
+	Array<Vector3> &verts = const_cast<Array<Vector3>&>(m_vertices);
+	const NavmeshTriangle &triA = tris[triIndexA];
+	const NavmeshTriangle &triB = tris[triIndexB];
+
+	PrimitiveTypes::UInt32 shared[2];
+	PrimitiveTypes::UInt32 sharedCount = 0;
+
+	for (int i = 0; i < 3; ++i)
+	{
+		for (int j = 0; j < 3; ++j)
+		{
+			if (triA.vertexIndices[i] == triB.vertexIndices[j])
+			{
+				shared[sharedCount++] = triA.vertexIndices[i];
+				if (sharedCount == 2)
+					break;
+			}
+		}
+		if (sharedCount == 2)
+			break;
+	}
+
+	if (sharedCount < 2)
+	{
+		outLeft = triA.center;
+		outRight = triA.center;
+		return;
+	}
+
+	auto getIndex = [&](PrimitiveTypes::UInt32 vertexIndex) -> int
+	{
+		for (int i = 0; i < 3; ++i)
+		{
+			if (triA.vertexIndices[i] == vertexIndex)
+				return i;
+		}
+		return -1;
+	};
+
+	int idx0 = getIndex(shared[0]);
+	int idx1 = getIndex(shared[1]);
+
+	if (idx0 != -1 && idx1 != -1)
+	{
+		if (((idx0 + 1) % 3) == idx1)
+		{
+			outLeft = verts[shared[0]];
+			outRight = verts[shared[1]];
+		}
+		else
+		{
+			outLeft = verts[shared[1]];
+			outRight = verts[shared[0]];
+		}
+	}
+	else
+	{
+		outLeft = verts[shared[0]];
+		outRight = verts[shared[1]];
+	}
+}
+
+float NavmeshComponent::triArea2(const Vector3 &a, const Vector3 &b, const Vector3 &c) const
+{
+	float bax = b.m_x - a.m_x;
+	float baz = b.m_z - a.m_z;
+	float cax = c.m_x - a.m_x;
+	float caz = c.m_z - a.m_z;
+	return bax * caz - baz * cax;
 }
 
 // ============================================================================
@@ -1091,6 +1290,22 @@ void NavmeshComponent::clearDebugPath()
 	m_debugPath.reset(0);
 	m_debugPathEnabled = false;
 	PEINFO("NavmeshComponent: Debug path cleared\n");
+}
+
+void NavmeshComponent::setDebugRawPath(const Array<Vector3>& path)
+{
+	m_debugRawPath.reset(path.m_size);
+	for (PrimitiveTypes::UInt32 i = 0; i < path.m_size; ++i)
+	{
+		m_debugRawPath.add(const_cast<Array<Vector3>&>(path)[i]);
+	}
+	m_debugRawPathEnabled = true;
+}
+
+void NavmeshComponent::clearDebugRawPath()
+{
+	m_debugRawPath.reset(0);
+	m_debugRawPathEnabled = false;
 }
 
 }; // namespace Components

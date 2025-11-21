@@ -164,9 +164,8 @@ struct NavmeshComponent : public Component
 	bool findTrianglePath(PrimitiveTypes::Int32 startTriIndex, PrimitiveTypes::Int32 endTriIndex,
 	                      Array<PrimitiveTypes::UInt32>& outTrianglePath);
 
-	// Convert triangle path to waypoint positions
-	// Uses triangle centers as waypoints (can be improved with string pulling later)
-	void trianglePathToWaypoints(const Array<PrimitiveTypes::UInt32>& trianglePath, Array<Vector3>& outWaypoints);
+	// Convert triangle path to waypoint positions using string-pulling (funnel) smoothing
+	void trianglePathToWaypoints(const Array<PrimitiveTypes::UInt32>& trianglePath, const Vector3 &startPos, const Vector3 &endPos, Array<Vector3>& outWaypoints);
 
 	// ========================================================================
 	// Accessors
@@ -216,6 +215,11 @@ struct NavmeshComponent : public Component
 	void setDebugPathEnabled(bool enabled) { m_debugPathEnabled = enabled; }
 	bool isDebugPathEnabled() const { return m_debugPathEnabled; }
 
+	void setDebugRawPath(const Array<Vector3>& path);
+	void clearDebugRawPath();
+	void setDebugRawPathEnabled(bool enabled) { m_debugRawPathEnabled = enabled; }
+	bool isDebugRawPathEnabled() const { return m_debugRawPathEnabled; }
+
 	// ========================================================================
 	// Data Members
 	// ========================================================================
@@ -236,6 +240,8 @@ struct NavmeshComponent : public Component
 	// Path debug visualization
 	Array<Vector3> m_debugPath;             // Current path being visualized
 	bool m_debugPathEnabled;                // Show path in game?
+	Array<Vector3> m_debugRawPath;          // Jagged path visualization
+	bool m_debugRawPathEnabled;
 
 	// Corner metadata
 	Vector3 m_navmeshMin;
@@ -257,6 +263,9 @@ struct NavmeshComponent : public Component
 	bool shouldObstacleBlockNavmesh(const Vector3 &min, const Vector3 &max) const;
 	bool doesTriangleOverlapObstacle(PrimitiveTypes::UInt32 triangleIndex, const Vector3 &obsMin, const Vector3 &obsMax) const;
 	void computeCornerPositions();
+	void computePortalPoints(PrimitiveTypes::UInt32 triIndexA, PrimitiveTypes::UInt32 triIndexB, Vector3 &outLeft, Vector3 &outRight) const;
+	float triArea2(const Vector3 &a, const Vector3 &b, const Vector3 &c) const;
+	void trianglePathToRawWaypoints(const Array<PrimitiveTypes::UInt32>& trianglePath, const Vector3 &startPos, const Vector3 &endPos, Array<Vector3>& outWaypoints);
 
 	// Spatial acceleration (optional - for future optimization)
 	// Could add a grid or BVH here for faster point queries
