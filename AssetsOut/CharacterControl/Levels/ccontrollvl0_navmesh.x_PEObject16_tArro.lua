@@ -10,6 +10,6 @@ args['myScriptPackage']="CharacterControl"
 
 
 args['name'] = '2'
-args['next'] = '1, 3'
+args['next'] = '1'
 
 end -- required
