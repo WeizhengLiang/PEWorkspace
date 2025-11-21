@@ -206,6 +206,12 @@ struct NavmeshComponent : public Component
 	void setDebugRenderEnabled(bool enabled) { m_debugRenderEnabled = enabled; }
 	bool isDebugRenderEnabled() const { return m_debugRenderEnabled; }
 
+	// Path visualization
+	void setDebugPath(const Array<Vector3>& path);
+	void clearDebugPath();
+	void setDebugPathEnabled(bool enabled) { m_debugPathEnabled = enabled; }
+	bool isDebugPathEnabled() const { return m_debugPathEnabled; }
+
 	// ========================================================================
 	// Data Members
 	// ========================================================================
@@ -222,6 +228,10 @@ struct NavmeshComponent : public Component
 	// Debug rendering
 	bool m_debugRenderEnabled;              // Show navmesh in game?
 	Handle m_hDebugMesh;                    // LineMesh for visualization (optional)
+
+	// Path debug visualization
+	Array<Vector3> m_debugPath;             // Current path being visualized
+	bool m_debugPathEnabled;                // Show path in game?
 
 	// Spatial acceleration (optional - for future optimization)
 	// Could add a grid or BVH here for faster point queries

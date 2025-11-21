@@ -64,6 +64,36 @@ void ClientGameObjectManagerAddon::addDefaultComponents()
 		RootSceneNode::Instance()->addComponent(m_hNavmesh);
 
 		PEINFO("NAVMESH: Debug visualization enabled (green wireframe)\n");
+
+		// TEST: Create a SHORT test path to visualize pathfinding
+		// Using nearby triangles to avoid Array overflow
+		PEINFO("=================================================================\n");
+		PEINFO("NAVMESH: Creating SHORT test path for visualization...\n");
+
+		// Use triangle centers directly for a simple test
+		// Triangle 0 to Triangle 10 (should be nearby)
+		if (pNavmesh->getTriangleCount() > 10)
+		{
+			Vector3 startPos = pNavmesh->getTriangle(0).center;
+			Vector3 endPos = pNavmesh->getTriangle(10).center;
+
+			PEINFO("  Testing path from triangle 0 to triangle 10\n");
+			PEINFO("  Start: (%.1f, %.1f, %.1f)\n", startPos.getX(), startPos.getY(), startPos.getZ());
+			PEINFO("  End: (%.1f, %.1f, %.1f)\n", endPos.getX(), endPos.getY(), endPos.getZ());
+
+			Array<Vector3> testPath(*m_pContext, m_arena);
+			if (pNavmesh->findPath(startPos, endPos, testPath))
+			{
+				pNavmesh->setDebugPath(testPath);
+				PEINFO("NAVMESH: Test path created! You should see a YELLOW LINE on the navmesh\n");
+				PEINFO("  Waypoints: %d\n", testPath.m_size);
+			}
+			else
+			{
+				PEINFO("NAVMESH: Test path FAILED\n");
+			}
+		}
+		PEINFO("=================================================================\n");
 	}
 	else
 	{

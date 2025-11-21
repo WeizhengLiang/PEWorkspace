@@ -34,8 +34,10 @@ NavmeshComponent::NavmeshComponent(PE::GameContext &context, PE::MemoryArena are
 	: Component(context, arena, hMyself)
 	, m_vertices(context, arena)
 	, m_triangles(context, arena)
+	, m_debugPath(context, arena)
 	, m_version(1.0f)
 	, m_debugRenderEnabled(false)
+	, m_debugPathEnabled(false)
 {
 	m_name[0] = '\0';
 	m_transform.loadIdentity();  // Initialize transform to identity
@@ -524,6 +526,43 @@ void NavmeshComponent::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 		0.0f,  // 0 = persistent (draw every frame)
 		1.0f   // Scale
 	);
+
+	// Draw path visualization if enabled
+	if (m_debugPathEnabled && m_debugPath.m_size > 1)
+	{
+		// Draw path as connected line segments
+		// Color: Yellow for visibility
+		Vector3 pathOffset(0.0f, 0.1f, 0.0f); // Slightly higher than navmesh
+		Vector3 pathColor(1.0f, 1.0f, 0.0f); // Yellow
+
+		// Each segment = 2 points (start + end)
+		// We need m_debugPath.m_size - 1 segments
+		int numSegments = m_debugPath.m_size - 1;
+		int numPathPoints = numSegments * 2;
+		Vector3* pathLineData = (Vector3*)alloca(sizeof(Vector3) * numPathPoints * 2); // *2 for position + color
+
+		int pathPointIndex = 0;
+		for (PrimitiveTypes::UInt32 i = 0; i < m_debugPath.m_size - 1; i++)
+		{
+			const Vector3& start = const_cast<Array<Vector3>&>(m_debugPath)[i];
+			const Vector3& end = const_cast<Array<Vector3>&>(m_debugPath)[i + 1];
+
+			// Line segment from start to end
+			pathLineData[pathPointIndex++] = start + pathOffset;
+			pathLineData[pathPointIndex++] = pathColor;
+			pathLineData[pathPointIndex++] = end + pathOffset;
+			pathLineData[pathPointIndex++] = pathColor;
+		}
+
+		pDebugRenderer->createLineMesh(
+			false,  // No transform
+			identityMatrix,
+			&pathLineData[0].m_x,
+			numPathPoints,
+			0.0f,  // Persistent
+			1.0f   // Scale
+		);
+	}
 }
 
 // ============================================================================
@@ -575,7 +614,8 @@ bool NavmeshComponent::findPath(const Vector3& startPos, const Vector3& endPos, 
 	}
 
 	// Find triangle path using A*
-	Array<PrimitiveTypes::UInt32> trianglePath(*m_pContext, m_arena);
+	// Allocate space for worst-case path
+	Array<PrimitiveTypes::UInt32> trianglePath(*m_pContext, m_arena, m_triangles.m_size);
 	if (!findTrianglePath(startTri, endTri, trianglePath))
 	{
 		PEINFO("NavmeshComponent::findPath: A* failed to find path\n");
@@ -611,14 +651,16 @@ bool NavmeshComponent::findTrianglePath(PrimitiveTypes::Int32 startTriIndex, Pri
 	}
 
 	// A* data structures
-	Array<AStarNode> openList(*m_pContext, m_arena);  // Nodes to explore
-	Array<AStarNode> closedList(*m_pContext, m_arena);  // Nodes already explored
-	Array<bool> inClosed(*m_pContext, m_arena);  // Quick lookup: is triangle in closed list?
+	// Pre-allocate arrays to avoid running out of space during search
+	// Worst case: we explore all triangles, so allocate space for all
+	PrimitiveTypes::UInt32 maxNodes = m_triangles.m_size;
 
-	// Initialize closed list tracker
-	inClosed.reset(m_triangles.m_size);
-	for (PrimitiveTypes::UInt32 i = 0; i < m_triangles.m_size; i++)
-		inClosed.add(false);
+	// Use constructor with capacity to properly allocate memory
+	Array<AStarNode> openList(*m_pContext, m_arena, maxNodes);  // Nodes to explore
+	Array<AStarNode> closedList(*m_pContext, m_arena, maxNodes);  // Nodes already explored
+
+	// Initialize closed list tracker (one bool per triangle, initialized to false)
+	Array<bool> inClosed(*m_pContext, m_arena, m_triangles.m_size, false);
 
 	// Get goal triangle center for heuristic
 	const NavmeshTriangle& endTri = m_triangles[endTriIndex];
@@ -630,8 +672,16 @@ bool NavmeshComponent::findTrianglePath(PrimitiveTypes::Int32 startTriIndex, Pri
 	openList.add(AStarNode(startTriIndex, 0.0f, heuristic, -1));
 
 	// A* main loop
+	int iterations = 0;
 	while (openList.m_size > 0)
 	{
+		iterations++;
+		if (iterations > 10000)
+		{
+			PEINFO("ERROR: A* exceeded 10000 iterations, aborting\n");
+			return false;
+		}
+
 		// Find node with lowest fCost in open list
 		PrimitiveTypes::UInt32 bestIndex = 0;
 		float bestFCost = openList[0].fCost;
@@ -650,13 +700,23 @@ bool NavmeshComponent::findTrianglePath(PrimitiveTypes::Int32 startTriIndex, Pri
 
 		PrimitiveTypes::Int32 currentClosedIndex = (PrimitiveTypes::Int32)closedList.m_size;
 		closedList.add(current);
+
+		// Bounds check before accessing inClosed
+		if (current.triangleIndex >= m_triangles.m_size)
+		{
+			PEINFO("ERROR: Triangle index %d out of bounds (max: %d)\n",
+				current.triangleIndex, m_triangles.m_size - 1);
+			return false;
+		}
+
 		inClosed[current.triangleIndex] = true;
 
 		// Check if we reached the goal
 		if ((PrimitiveTypes::Int32)current.triangleIndex == endTriIndex)
 		{
 			// Reconstruct path by following parent indices backwards
-			Array<PrimitiveTypes::UInt32> reversePath(*m_pContext, m_arena);
+			// Allocate enough space for worst-case path (all triangles)
+			Array<PrimitiveTypes::UInt32> reversePath(*m_pContext, m_arena, maxNodes);
 			PrimitiveTypes::Int32 nodeIndex = currentClosedIndex;
 
 			while (nodeIndex != -1)
@@ -667,6 +727,7 @@ bool NavmeshComponent::findTrianglePath(PrimitiveTypes::Int32 startTriIndex, Pri
 			}
 
 			// Reverse the path (we built it backwards)
+			// Clear output array and reserve space
 			outTrianglePath.reset(reversePath.m_size);
 			for (PrimitiveTypes::Int32 i = (PrimitiveTypes::Int32)reversePath.m_size - 1; i >= 0; i--)
 			{
@@ -686,6 +747,14 @@ bool NavmeshComponent::findTrianglePath(PrimitiveTypes::Int32 startTriIndex, Pri
 			// Skip if no neighbor on this edge
 			if (neighborIndex == -1)
 				continue;
+
+			// Bounds check for neighbor index
+			if (neighborIndex < 0 || (PrimitiveTypes::UInt32)neighborIndex >= m_triangles.m_size)
+			{
+				PEINFO("WARNING: Invalid neighbor index %d for triangle %d (max: %d)\n",
+					neighborIndex, current.triangleIndex, m_triangles.m_size - 1);
+				continue;
+			}
 
 			// Skip if already in closed list
 			if (inClosed[neighborIndex])
@@ -738,9 +807,37 @@ void NavmeshComponent::trianglePathToWaypoints(const Array<PrimitiveTypes::UInt3
 
 	for (PrimitiveTypes::UInt32 i = 0; i < trianglePath.m_size; i++)
 	{
-		const NavmeshTriangle& tri = m_triangles[trianglePath[i]];
+		// Cast away const since Array doesn't have const operator[]
+		PrimitiveTypes::UInt32 triIndex = const_cast<Array<PrimitiveTypes::UInt32>&>(trianglePath)[i];
+		const NavmeshTriangle& tri = m_triangles[triIndex];
 		outWaypoints.add(tri.center);
 	}
+}
+
+// ============================================================================
+// Debug Path Visualization
+// ============================================================================
+
+void NavmeshComponent::setDebugPath(const Array<Vector3>& path)
+{
+	// Copy path to our internal debug path array
+	m_debugPath.reset(path.m_size);
+	for (PrimitiveTypes::UInt32 i = 0; i < path.m_size; i++)
+	{
+		m_debugPath.add(const_cast<Array<Vector3>&>(path)[i]);
+	}
+
+	// Auto-enable path visualization when path is set
+	m_debugPathEnabled = true;
+
+	PEINFO("NavmeshComponent: Debug path set (%d waypoints)\n", m_debugPath.m_size);
+}
+
+void NavmeshComponent::clearDebugPath()
+{
+	m_debugPath.reset(0);
+	m_debugPathEnabled = false;
+	PEINFO("NavmeshComponent: Debug path cleared\n");
 }
 
 }; // namespace Components
