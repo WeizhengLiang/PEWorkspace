@@ -714,15 +714,20 @@ void NavmeshComponent::refreshDynamicObstacles()
 
 		if (!pPhysics->isStatic || pPhysics->shapeType != PhysicsComponent::AABB)
 			continue;
+		if (!pPhysics->isNavmeshObstacle)
+			continue;
 
 		Vector3 min = pPhysics->worldAABBMin;
 		Vector3 max = pPhysics->worldAABBMax;
 		Vector3 size = max - min;
 		float height = size.m_y;
 
-		// Ignore nearly-flat surfaces (ground planes)
-		if (height < 0.45f)
-			continue;
+		// Ignore nearly-flat surfaces unless explicitly marked as nav obstacles
+		if (!pPhysics->isNavmeshObstacle)
+		{
+			if (height < 0.45f)
+				continue;
+		}
 
 		if (!shouldObstacleBlockNavmesh(min, max))
 			continue;

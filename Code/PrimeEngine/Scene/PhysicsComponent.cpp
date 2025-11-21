@@ -23,6 +23,7 @@ PhysicsComponent::PhysicsComponent(PE::GameContext &context, PE::MemoryArena are
 	, worldAABBMax(0.0f, 0.0f, 0.0f)
 	, isStatic(false)
 	, mass(1.0f)
+	, isNavmeshObstacle(false)
 	, m_linkedSceneNode(nullptr)
 	, localCenterOffset(0.0f, 0.0f, 0.0f)
 {

@@ -403,6 +403,12 @@ void GameObjectManager::do_CREATE_MESH(Events::Event *pEvt)
 				// Add to PhysicsManager
 				PhysicsManager::Instance()->addComponent(hPhysics);
 				
+				// Flag navmesh obstacles for specific meshes
+				if (strstr(meshName, "nazicar") != nullptr)
+				{
+					pPhysics->isNavmeshObstacle = true;
+				}
+				
 				// Removed: Spammy during level load (creates log for every static mesh)
 				// PEINFO("Created physics component for mesh: %s\n", pMesh->m_meshName);
 			}

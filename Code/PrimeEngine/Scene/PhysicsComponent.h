@@ -51,6 +51,7 @@ struct PhysicsComponent : public Component
 	// Physical properties
 	bool isStatic;           // Static objects don't move (buildings, ground)
 	float mass;              // Mass in kg
+	bool isNavmeshObstacle;
 	
 	// Link to scene graph
 	SceneNode* m_linkedSceneNode;  // The SceneNode this physics component controls
