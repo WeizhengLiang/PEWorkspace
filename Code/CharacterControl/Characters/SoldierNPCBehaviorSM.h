@@ -4,6 +4,8 @@
 
 #include "PrimeEngine/Events/Component.h"
 #include "PrimeEngine/Math/Vector3.h"
+#include "PrimeEngine/Utils/Array/Array.h"
+#include "PrimeEngine/PrimitiveTypes/PrimitiveTypes.h"
 
 #include "../Events/Events.h"
 
@@ -55,8 +57,13 @@ struct SoldierNPCBehaviorSM : public PE::Components::Component
 	States m_state;
 	Vector3 m_fallbackCornerTarget;
 	bool m_hasFallbackCorner;
+	Array<Vector3> m_navPath;
+	PrimitiveTypes::UInt32 m_currentNavWaypoint;
+	bool m_hasNavPath;
 
 	bool getSoldierWorldPosition(Vector3 &outPos);
+	bool requestPathToTarget(const Vector3 &target);
+	bool issueNextPathWaypoint();
 };
 
 };

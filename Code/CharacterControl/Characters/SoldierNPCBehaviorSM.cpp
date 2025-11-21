@@ -24,6 +24,9 @@ SoldierNPCBehaviorSM::SoldierNPCBehaviorSM(PE::GameContext &context, PE::MemoryA
 : Component(context, arena, hMyself)
 , m_hMovementSM(hMovementSM)
 , m_hasFallbackCorner(false)
+, m_navPath(context, arena)
+, m_currentNavWaypoint(0)
+, m_hasNavPath(false)
 {
 
 }
@@ -37,25 +40,12 @@ void SoldierNPCBehaviorSM::start()
 	else
 	{
 		ClientGameObjectManagerAddon *pAddon = (ClientGameObjectManagerAddon *)(m_pContext->get<CharacterControlContext>()->getGameObjectManagerAddon());
-		Vector3 currentPos;
-		bool hasPos = getSoldierWorldPosition(currentPos);
 		Vector3 fallbackPos;
-		if (pAddon && pAddon->getRandomNavmeshCorner(fallbackPos))
+		if (pAddon && pAddon->getRandomNavmeshCorner(fallbackPos) && requestPathToTarget(fallbackPos))
 		{
 			m_state = MOVING_TO_CORNER;
 			m_fallbackCornerTarget = fallbackPos;
 			m_hasFallbackCorner = true;
-
-			PE::Handle h("SoldierNPCMovementSM_Event_MOVE_TO", sizeof(SoldierNPCMovementSM_Event_MOVE_TO));
-			SoldierNPCMovementSM_Event_MOVE_TO *pEvt = new(h) SoldierNPCMovementSM_Event_MOVE_TO(fallbackPos);
-			pEvt->m_running = false;
-			m_hMovementSM.getObject<Component>()->handleEvent(pEvt);
-			h.release();
-
-			if (hasPos)
-			{
-				pAddon->visualizeNavmeshPath(currentPos, fallbackPos);
-			}
 		}
 		else
 		{
@@ -188,11 +178,18 @@ void SoldierNPCBehaviorSM::do_SoldierNPCMovementSM_Event_TARGET_REACHED(PE::Even
 	}
 	else if (m_state == MOVING_TO_CORNER)
 	{
+		if (m_hasNavPath && m_currentNavWaypoint + 1 < m_navPath.m_size)
+		{
+			++m_currentNavWaypoint;
+			issueNextPathWaypoint();
+			return;
+		}
+
+		m_hasNavPath = false;
+
 		ClientGameObjectManagerAddon *pAddon = (ClientGameObjectManagerAddon *)(m_pContext->get<CharacterControlContext>()->getGameObjectManagerAddon());
 		Vector3 nextCorner;
 		bool foundCorner = false;
-		Vector3 currentPos;
-		bool hasPos = getSoldierWorldPosition(currentPos);
 
 		if (pAddon)
 		{
@@ -217,22 +214,11 @@ void SoldierNPCBehaviorSM::do_SoldierNPCMovementSM_Event_TARGET_REACHED(PE::Even
 			}
 		}
 
-		if (foundCorner)
+		if (foundCorner && requestPathToTarget(nextCorner))
 		{
 			m_state = MOVING_TO_CORNER;
 			m_fallbackCornerTarget = nextCorner;
 			m_hasFallbackCorner = true;
-
-			PE::Handle h("SoldierNPCMovementSM_Event_MOVE_TO", sizeof(SoldierNPCMovementSM_Event_MOVE_TO));
-			SoldierNPCMovementSM_Event_MOVE_TO *pEvt = new(h) SoldierNPCMovementSM_Event_MOVE_TO(nextCorner);
-			pEvt->m_running = false;
-			m_hMovementSM.getObject<Component>()->handleEvent(pEvt);
-			h.release();
-
-			if (hasPos)
-			{
-				pAddon->visualizeNavmeshPath(currentPos, nextCorner);
-			}
 		}
 		else
 		{
@@ -257,6 +243,49 @@ bool SoldierNPCBehaviorSM::getSoldierWorldPosition(Vector3 &outPos)
 		return false;
 
 	outPos = pSN->m_base.getPos();
+	return true;
+}
+
+bool SoldierNPCBehaviorSM::requestPathToTarget(const Vector3 &target)
+{
+	ClientGameObjectManagerAddon *pAddon = (ClientGameObjectManagerAddon *)(m_pContext->get<CharacterControlContext>()->getGameObjectManagerAddon());
+	if (!pAddon)
+		return false;
+
+	Vector3 startPos;
+	if (!getSoldierWorldPosition(startPos))
+		return false;
+
+	if (!pAddon->computeNavmeshPath(startPos, target, m_navPath, true))
+	{
+		m_hasNavPath = false;
+		return false;
+	}
+
+	if (m_navPath.m_size == 0)
+	{
+		m_hasNavPath = false;
+		return false;
+	}
+
+	m_currentNavWaypoint = 0;
+	m_hasNavPath = true;
+	return issueNextPathWaypoint();
+}
+
+bool SoldierNPCBehaviorSM::issueNextPathWaypoint()
+{
+	if (!m_hasNavPath || m_navPath.m_size == 0 || m_currentNavWaypoint >= m_navPath.m_size)
+		return false;
+
+	Vector3 waypoint = m_navPath[m_currentNavWaypoint];
+
+	PE::Handle h("SoldierNPCMovementSM_Event_MOVE_TO", sizeof(SoldierNPCMovementSM_Event_MOVE_TO));
+	SoldierNPCMovementSM_Event_MOVE_TO *pEvt = new(h) SoldierNPCMovementSM_Event_MOVE_TO(waypoint);
+	pEvt->m_running = false;
+	m_hMovementSM.getObject<Component>()->handleEvent(pEvt);
+	h.release();
+
 	return true;
 }
 

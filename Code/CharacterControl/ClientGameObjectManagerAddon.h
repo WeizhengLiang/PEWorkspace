@@ -3,6 +3,7 @@
 
 #include "GameObjectMangerAddon.h"
 #include "Events/Events.h"
+#include "PrimeEngine/Utils/Array/Array.h"
 
 #include "WayPoint.h"
 #include "Characters/SoldierNPC.h"
@@ -56,7 +57,7 @@ struct ClientGameObjectManagerAddon : public GameObjectManagerAddon
 	WayPoint *getWayPoint(const char *name);
 	SoldierNPC *getFirstTargetableSoldierObject();
 	bool getRandomNavmeshCorner(Vector3 &outPos);
-	bool visualizeNavmeshPath(const Vector3 &start, const Vector3 &end);
+	bool computeNavmeshPath(const Vector3 &start, const Vector3 &end, Array<Vector3> &outPath, bool visualize);
 
 	// Navmesh for pathfinding
 	PE::Handle m_hNavmesh;

@@ -184,7 +184,7 @@ bool ClientGameObjectManagerAddon::getRandomNavmeshCorner(Vector3 &outPos)
 	return pNavmesh->getRandomCornerPosition(outPos);
 }
 
-bool ClientGameObjectManagerAddon::visualizeNavmeshPath(const Vector3 &start, const Vector3 &end)
+bool ClientGameObjectManagerAddon::computeNavmeshPath(const Vector3 &start, const Vector3 &end, Array<Vector3> &outPath, bool visualize)
 {
 	if (!m_hNavmesh.isValid())
 		return false;
@@ -193,11 +193,14 @@ bool ClientGameObjectManagerAddon::visualizeNavmeshPath(const Vector3 &start, co
 	if (!pNavmesh)
 		return false;
 
-	Array<Vector3> path(*m_pContext, m_arena, pNavmesh->getTriangleCount());
-	if (!pNavmesh->findPath(start, end, path))
+	if (!pNavmesh->findPath(start, end, outPath))
 		return false;
 
-	pNavmesh->setDebugPath(path);
+	if (visualize)
+	{
+		pNavmesh->setDebugPath(outPath);
+	}
+
 	return true;
 }
 
