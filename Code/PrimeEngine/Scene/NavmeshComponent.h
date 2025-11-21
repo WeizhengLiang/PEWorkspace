@@ -42,6 +42,8 @@ struct NavmeshTriangle
 	// Cached data for pathfinding (computed at load time)
 	Vector3 center;                      // Triangle centroid (average of 3 vertices)
 	PrimitiveTypes::Float32 area;        // Triangle area (for heuristics)
+	Vector3 boundsMin;                   // Axis-aligned bounds of the triangle
+	Vector3 boundsMax;
 
 	// Constructor
 	NavmeshTriangle()
@@ -194,6 +196,8 @@ struct NavmeshComponent : public Component
 	void getTriangleVertices(PrimitiveTypes::UInt32 triangleIndex, Vector3 outVerts[3]) const;
 
 	const char* getName() const { return m_name; }
+	bool getCornerPosition(PrimitiveTypes::UInt32 index, Vector3 &outCorner) const;
+	bool getRandomCornerPosition(Vector3 &outCorner) const;
 
 	// ========================================================================
 	// Debug & Visualization
@@ -232,6 +236,27 @@ struct NavmeshComponent : public Component
 	// Path debug visualization
 	Array<Vector3> m_debugPath;             // Current path being visualized
 	bool m_debugPathEnabled;                // Show path in game?
+
+	// Corner metadata
+	Vector3 m_navmeshMin;
+	Vector3 m_navmeshMax;
+	Vector3 m_cornerPositions[4];
+	bool m_hasCornerData;
+
+	// Obstacle tracking
+	Array<bool> m_triangleBlocked;
+	struct NavmeshObstacle
+	{
+		Vector3 min;
+		Vector3 max;
+	};
+	Array<NavmeshObstacle, 1> m_activeObstacles;
+
+	// Helpers
+	void refreshDynamicObstacles();
+	bool shouldObstacleBlockNavmesh(const Vector3 &min, const Vector3 &max) const;
+	bool doesTriangleOverlapObstacle(PrimitiveTypes::UInt32 triangleIndex, const Vector3 &obsMin, const Vector3 &obsMax) const;
+	void computeCornerPositions();
 
 	// Spatial acceleration (optional - for future optimization)
 	// Could add a grid or BVH here for faster point queries

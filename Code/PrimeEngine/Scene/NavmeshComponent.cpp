@@ -11,10 +11,14 @@
 #include "PrimeEngine/Lua/LuaEnvironment.h"
 #include "PrimeEngine/Scene/SceneNode.h"
 #include "PrimeEngine/Scene/DebugRenderer.h"
+#include "PrimeEngine/Scene/PhysicsManager.h"
+#include "PrimeEngine/Scene/PhysicsComponent.h"
 
 // For debug output and string functions
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <float.h>
 
 // Helper: Check if string contains substring (StringOps doesn't have this)
 static bool stringContains(const char* str, const char* substr)
@@ -35,12 +39,22 @@ NavmeshComponent::NavmeshComponent(PE::GameContext &context, PE::MemoryArena are
 	, m_vertices(context, arena)
 	, m_triangles(context, arena)
 	, m_debugPath(context, arena)
+	, m_triangleBlocked(context, arena)
+	, m_activeObstacles(context, arena)
 	, m_version(1.0f)
 	, m_debugRenderEnabled(false)
 	, m_debugPathEnabled(false)
+	, m_navmeshMin(FLT_MAX, FLT_MAX, FLT_MAX)
+	, m_navmeshMax(-FLT_MAX, -FLT_MAX, -FLT_MAX)
+	, m_hasCornerData(false)
 {
 	m_name[0] = '\0';
 	m_transform.loadIdentity();  // Initialize transform to identity
+	for (int i = 0; i < 4; ++i)
+	{
+		m_cornerPositions[i] = Vector3(0.0f, 0.0f, 0.0f);
+	}
+	m_activeObstacles.reset(4);
 }
 
 // ============================================================================
@@ -266,6 +280,25 @@ void NavmeshComponent::computeDerivedData()
 {
 	PEINFO("NavmeshComponent: Computing derived data...\n");
 
+	// Compute navmesh bounds from vertices
+	if (m_vertices.m_size > 0)
+	{
+		m_navmeshMin = Vector3(FLT_MAX, FLT_MAX, FLT_MAX);
+		m_navmeshMax = Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+
+		for (PrimitiveTypes::UInt32 i = 0; i < m_vertices.m_size; ++i)
+		{
+			const Vector3 &v = m_vertices[i];
+			if (v.m_x < m_navmeshMin.m_x) m_navmeshMin.m_x = v.m_x;
+			if (v.m_y < m_navmeshMin.m_y) m_navmeshMin.m_y = v.m_y;
+			if (v.m_z < m_navmeshMin.m_z) m_navmeshMin.m_z = v.m_z;
+
+			if (v.m_x > m_navmeshMax.m_x) m_navmeshMax.m_x = v.m_x;
+			if (v.m_y > m_navmeshMax.m_y) m_navmeshMax.m_y = v.m_y;
+			if (v.m_z > m_navmeshMax.m_z) m_navmeshMax.m_z = v.m_z;
+		}
+	}
+
 	for (PrimitiveTypes::UInt32 i = 0; i < m_triangles.m_size; i++)
 	{
 		NavmeshTriangle& tri = m_triangles[i];
@@ -284,9 +317,68 @@ void NavmeshComponent::computeDerivedData()
 		Vector3 AC = v2 - v0;
 		Vector3 cross = AB.crossProduct(AC);
 		tri.area = cross.length() * 0.5f;
+
+		// Compute bounds
+		tri.boundsMin.m_x = v0.m_x;
+		tri.boundsMin.m_y = v0.m_y;
+		tri.boundsMin.m_z = v0.m_z;
+		tri.boundsMax.m_x = v0.m_x;
+		tri.boundsMax.m_y = v0.m_y;
+		tri.boundsMax.m_z = v0.m_z;
+
+		const Vector3 verts[2] = { v1, v2 };
+		for (int vi = 0; vi < 2; ++vi)
+		{
+			const Vector3 &v = verts[vi];
+			if (v.m_x < tri.boundsMin.m_x) tri.boundsMin.m_x = v.m_x;
+			if (v.m_y < tri.boundsMin.m_y) tri.boundsMin.m_y = v.m_y;
+			if (v.m_z < tri.boundsMin.m_z) tri.boundsMin.m_z = v.m_z;
+
+			if (v.m_x > tri.boundsMax.m_x) tri.boundsMax.m_x = v.m_x;
+			if (v.m_y > tri.boundsMax.m_y) tri.boundsMax.m_y = v.m_y;
+			if (v.m_z > tri.boundsMax.m_z) tri.boundsMax.m_z = v.m_z;
+		}
 	}
 
+	computeCornerPositions();
+
 	PEINFO("NavmeshComponent: Derived data computed\n");
+}
+
+void NavmeshComponent::computeCornerPositions()
+{
+	if (m_vertices.m_size == 0 || m_triangles.m_size == 0)
+	{
+		m_hasCornerData = false;
+		return;
+	}
+
+	float minX = m_navmeshMin.m_x;
+	float maxX = m_navmeshMax.m_x;
+	float minZ = m_navmeshMin.m_z;
+	float maxZ = m_navmeshMax.m_z;
+	float sampleY = (m_navmeshMin.m_y + m_navmeshMax.m_y) * 0.5f;
+
+	Vector3 samples[4] = {
+		Vector3(minX, sampleY, minZ), // South-West
+		Vector3(maxX, sampleY, minZ), // South-East
+		Vector3(minX, sampleY, maxZ), // North-West
+		Vector3(maxX, sampleY, maxZ)  // North-East
+	};
+
+	m_hasCornerData = true;
+
+	for (int i = 0; i < 4; ++i)
+	{
+		PrimitiveTypes::Int32 triIndex = findNearestTriangle(samples[i]);
+		if (triIndex == -1)
+		{
+			m_hasCornerData = false;
+			break;
+		}
+
+		m_cornerPositions[i] = m_triangles[triIndex].center;
+	}
 }
 
 void NavmeshComponent::computeAdjacency()
@@ -457,6 +549,24 @@ void NavmeshComponent::getTriangleVertices(PrimitiveTypes::UInt32 triangleIndex,
 	outVerts[2] = verts[tri.vertexIndices[2]];
 }
 
+bool NavmeshComponent::getCornerPosition(PrimitiveTypes::UInt32 index, Vector3 &outCorner) const
+{
+	if (!m_hasCornerData || index >= 4)
+		return false;
+
+	outCorner = m_cornerPositions[index];
+	return true;
+}
+
+bool NavmeshComponent::getRandomCornerPosition(Vector3 &outCorner) const
+{
+	if (!m_hasCornerData)
+		return false;
+
+	PrimitiveTypes::UInt32 index = (PrimitiveTypes::UInt32)(rand() % 4);
+	return getCornerPosition(index, outCorner);
+}
+
 // ============================================================================
 // Debug Rendering
 // ============================================================================
@@ -566,6 +676,121 @@ void NavmeshComponent::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 }
 
 // ============================================================================
+// Dynamic Obstacle Detection
+// ============================================================================
+void NavmeshComponent::refreshDynamicObstacles()
+{
+	if (m_triangles.m_size == 0)
+		return;
+
+	if (m_triangleBlocked.m_capacity < m_triangles.m_size)
+	{
+		m_triangleBlocked.reset(m_triangles.m_size);
+	}
+	m_triangleBlocked.m_size = m_triangles.m_size;
+	for (PrimitiveTypes::UInt32 i = 0; i < m_triangleBlocked.m_size; ++i)
+	{
+		m_triangleBlocked[i] = false;
+	}
+
+	PhysicsManager *pPhysicsMgr = PhysicsManager::Instance();
+	if (!pPhysicsMgr)
+	{
+		return;
+	}
+
+	PrimitiveTypes::UInt32 physicsCount = pPhysicsMgr->m_physicsComponents.m_size;
+	m_activeObstacles.clear();
+
+	for (PrimitiveTypes::UInt32 i = 0; i < physicsCount; ++i)
+	{
+		Handle hPhysics = pPhysicsMgr->m_physicsComponents[i];
+		if (!hPhysics.isValid())
+			continue;
+
+		PhysicsComponent *pPhysics = hPhysics.getObject<PhysicsComponent>();
+		if (!pPhysics)
+			continue;
+
+		if (!pPhysics->isStatic || pPhysics->shapeType != PhysicsComponent::AABB)
+			continue;
+
+		Vector3 min = pPhysics->worldAABBMin;
+		Vector3 max = pPhysics->worldAABBMax;
+		Vector3 size = max - min;
+		float height = size.m_y;
+
+		// Ignore nearly-flat surfaces (ground planes)
+		if (height < 0.45f)
+			continue;
+
+		if (!shouldObstacleBlockNavmesh(min, max))
+			continue;
+
+		NavmeshObstacle obs;
+		obs.min = min;
+		obs.max = max;
+		m_activeObstacles.add(obs);
+	}
+
+	if (m_activeObstacles.m_size == 0)
+		return;
+
+	for (PrimitiveTypes::UInt32 triIndex = 0; triIndex < m_triangles.m_size; ++triIndex)
+	{
+		for (PrimitiveTypes::UInt32 obsIndex = 0; obsIndex < m_activeObstacles.m_size; ++obsIndex)
+		{
+			const NavmeshObstacle &obs = m_activeObstacles[obsIndex];
+			if (doesTriangleOverlapObstacle(triIndex, obs.min, obs.max))
+			{
+				m_triangleBlocked[triIndex] = true;
+				break;
+			}
+		}
+	}
+}
+
+bool NavmeshComponent::shouldObstacleBlockNavmesh(const Vector3 &min, const Vector3 &max) const
+{
+	const float verticalPadding = 0.25f;
+	float navMinY = m_navmeshMin.m_y - verticalPadding;
+	float navMaxY = m_navmeshMax.m_y + verticalPadding;
+
+	if (max.m_y < navMinY)
+		return false;
+
+	if (min.m_y > navMaxY)
+		return false;
+
+	return true;
+}
+
+bool NavmeshComponent::doesTriangleOverlapObstacle(PrimitiveTypes::UInt32 triangleIndex, const Vector3 &obsMin, const Vector3 &obsMax) const
+{
+	if (triangleIndex >= m_triangles.m_size)
+		return false;
+
+	Array<NavmeshTriangle>& tris = const_cast<Array<NavmeshTriangle>&>(m_triangles);
+	const NavmeshTriangle &tri = tris[triangleIndex];
+
+	bool overlapXZ =
+		!(tri.boundsMax.m_x < obsMin.m_x ||
+			tri.boundsMin.m_x > obsMax.m_x ||
+			tri.boundsMax.m_z < obsMin.m_z ||
+			tri.boundsMin.m_z > obsMax.m_z);
+
+	if (!overlapXZ)
+		return false;
+
+	const float verticalTolerance = 0.25f;
+	bool overlapY =
+		!(tri.boundsMax.m_y + verticalTolerance < obsMin.m_y ||
+			tri.boundsMin.m_y - verticalTolerance > obsMax.m_y);
+
+	return overlapY;
+}
+
+// ============================================================================
 // Pathfinding - A* Algorithm
 // ============================================================================
 
@@ -611,6 +836,15 @@ bool NavmeshComponent::findPath(const Vector3& startPos, const Vector3& endPos, 
 	{
 		PEINFO("NavmeshComponent::findPath: Failed to find valid start/end triangles\n");
 		return false;
+	}
+
+	refreshDynamicObstacles();
+	if (m_triangleBlocked.m_size == m_triangles.m_size)
+	{
+		if (startTri >= 0 && (PrimitiveTypes::UInt32)startTri < m_triangleBlocked.m_size)
+			m_triangleBlocked[startTri] = false;
+		if (endTri >= 0 && (PrimitiveTypes::UInt32)endTri < m_triangleBlocked.m_size)
+			m_triangleBlocked[endTri] = false;
 	}
 
 	// Find triangle path using A*
@@ -757,8 +991,11 @@ bool NavmeshComponent::findTrianglePath(PrimitiveTypes::Int32 startTriIndex, Pri
 			}
 
 			// Skip if already in closed list
-			if (inClosed[neighborIndex])
-				continue;
+		if (inClosed[neighborIndex])
+			continue;
+
+		if (m_triangleBlocked.m_size == m_triangles.m_size && m_triangleBlocked[neighborIndex])
+			continue;
 
 			// Calculate cost to reach this neighbor
 			const NavmeshTriangle& neighborTri = m_triangles[neighborIndex];

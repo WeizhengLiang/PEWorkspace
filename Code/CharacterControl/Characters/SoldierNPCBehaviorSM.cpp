@@ -23,6 +23,7 @@ PE_IMPLEMENT_CLASS1(SoldierNPCBehaviorSM, Component);
 SoldierNPCBehaviorSM::SoldierNPCBehaviorSM(PE::GameContext &context, PE::MemoryArena arena, PE::Handle hMyself, PE::Handle hMovementSM) 
 : Component(context, arena, hMyself)
 , m_hMovementSM(hMovementSM)
+, m_hasFallbackCorner(false)
 {
 
 }
@@ -35,15 +36,31 @@ void SoldierNPCBehaviorSM::start()
 	}
 	else
 	{
-		m_state = IDLE; // stand in place
+		ClientGameObjectManagerAddon *pAddon = (ClientGameObjectManagerAddon *)(m_pContext->get<CharacterControlContext>()->getGameObjectManagerAddon());
+		Vector3 fallbackPos;
+		if (pAddon && pAddon->getRandomNavmeshCorner(fallbackPos))
+		{
+			m_state = MOVING_TO_CORNER;
+			m_fallbackCornerTarget = fallbackPos;
+			m_hasFallbackCorner = true;
 
-		PE::Handle h("SoldierNPCMovementSM_Event_STOP", sizeof(SoldierNPCMovementSM_Event_STOP));
-		SoldierNPCMovementSM_Event_STOP *pEvt = new(h) SoldierNPCMovementSM_Event_STOP();
+			PE::Handle h("SoldierNPCMovementSM_Event_MOVE_TO", sizeof(SoldierNPCMovementSM_Event_MOVE_TO));
+			SoldierNPCMovementSM_Event_MOVE_TO *pEvt = new(h) SoldierNPCMovementSM_Event_MOVE_TO(fallbackPos);
+			pEvt->m_running = false;
+			m_hMovementSM.getObject<Component>()->handleEvent(pEvt);
+			h.release();
+		}
+		else
+		{
+			m_state = IDLE; // stand in place
 
-		m_hMovementSM.getObject<Component>()->handleEvent(pEvt);
-		// release memory now that event is processed
-		h.release();
-		
+			PE::Handle h("SoldierNPCMovementSM_Event_STOP", sizeof(SoldierNPCMovementSM_Event_STOP));
+			SoldierNPCMovementSM_Event_STOP *pEvt = new(h) SoldierNPCMovementSM_Event_STOP();
+
+			m_hMovementSM.getObject<Component>()->handleEvent(pEvt);
+			// release memory now that event is processed
+			h.release();
+		}
 	}	
 }
 
@@ -161,6 +178,11 @@ void SoldierNPCBehaviorSM::do_SoldierNPCMovementSM_Event_TARGET_REACHED(PE::Even
 				}
 			}
 		}
+	}
+	else if (m_state == MOVING_TO_CORNER)
+	{
+		m_state = IDLE;
+		m_hasFallbackCorner = false;
 	}
 }
 

@@ -200,6 +200,18 @@ WayPoint *ClientGameObjectManagerAddon::getWayPoint(const char *name)
 	return NULL;
 }
 
+bool ClientGameObjectManagerAddon::getRandomNavmeshCorner(Vector3 &outPos)
+{
+	if (!m_hNavmesh.isValid())
+		return false;
+
+	NavmeshComponent *pNavmesh = m_hNavmesh.getObject<NavmeshComponent>();
+	if (!pNavmesh)
+		return false;
+
+	return pNavmesh->getRandomCornerPosition(outPos);
+}
+
 
 void ClientGameObjectManagerAddon::createTank(int index, int &threadOwnershipMask)
 {

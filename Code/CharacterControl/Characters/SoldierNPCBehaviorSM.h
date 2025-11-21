@@ -3,6 +3,7 @@
 
 
 #include "PrimeEngine/Events/Component.h"
+#include "PrimeEngine/Math/Vector3.h"
 
 #include "../Events/Events.h"
 
@@ -22,6 +23,7 @@ struct SoldierNPCBehaviorSM : public PE::Components::Component
 		PATROLLING_WAYPOINTS,
 		//LOOKING_FOR_TARGET,
 		SHOOTING_AT_TARGET,
+		MOVING_TO_CORNER,
 	};
 
 
@@ -51,6 +53,8 @@ struct SoldierNPCBehaviorSM : public PE::Components::Component
 	bool m_shouldLookForTargetAndShoot;
 	int m_lookForTargetAndShoot;
 	States m_state;
+	Vector3 m_fallbackCornerTarget;
+	bool m_hasFallbackCorner;
 };
 
 };
