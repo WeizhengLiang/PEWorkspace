@@ -719,6 +719,17 @@ void NavmeshComponent::refreshDynamicObstacles()
 
 		Vector3 min = pPhysics->worldAABBMin;
 		Vector3 max = pPhysics->worldAABBMax;
+
+		if (pPhysics->isNavmeshObstacle)
+		{
+			const float agentRadius = 0.6f;
+			const float tolerance = 0.5f;
+			const float inflate = agentRadius + tolerance;
+			min.m_x -= inflate;
+			min.m_z -= inflate;
+			max.m_x += inflate;
+			max.m_z += inflate;
+		}
 		Vector3 size = max - min;
 		float height = size.m_y;
 
