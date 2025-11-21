@@ -526,5 +526,222 @@ void NavmeshComponent::do_GATHER_DRAWCALLS(Events::Event *pEvt)
 	);
 }
 
+// ============================================================================
+// Pathfinding - A* Algorithm
+// ============================================================================
+
+// Helper struct for A* algorithm
+struct AStarNode
+{
+	PrimitiveTypes::UInt32 triangleIndex;
+	PrimitiveTypes::Float32 gCost;  // Cost from start
+	PrimitiveTypes::Float32 hCost;  // Heuristic cost to goal
+	PrimitiveTypes::Float32 fCost;  // gCost + hCost
+	PrimitiveTypes::Int32 parentIndex;  // Index in closed list of parent node (-1 if none)
+
+	AStarNode()
+		: triangleIndex(0), gCost(0.0f), hCost(0.0f), fCost(0.0f), parentIndex(-1)
+	{}
+
+	AStarNode(PrimitiveTypes::UInt32 tri, PrimitiveTypes::Float32 g, PrimitiveTypes::Float32 h, PrimitiveTypes::Int32 parent = -1)
+		: triangleIndex(tri), gCost(g), hCost(h), fCost(g + h), parentIndex(parent)
+	{}
+};
+
+bool NavmeshComponent::findPath(const Vector3& startPos, const Vector3& endPos, Array<Vector3>& outPath)
+{
+	// Find triangles containing start and end positions
+	PrimitiveTypes::Int32 startTri = findTriangleContainingPoint(startPos);
+	PrimitiveTypes::Int32 endTri = findTriangleContainingPoint(endPos);
+
+	// If either position is not on navmesh, try finding nearest triangle
+	if (startTri == -1)
+	{
+		startTri = findNearestTriangle(startPos);
+		PEINFO("NavmeshComponent::findPath: Start position not on navmesh, using nearest triangle %d\n", startTri);
+	}
+
+	if (endTri == -1)
+	{
+		endTri = findNearestTriangle(endPos);
+		PEINFO("NavmeshComponent::findPath: End position not on navmesh, using nearest triangle %d\n", endTri);
+	}
+
+	// If we still can't find valid triangles, fail
+	if (startTri == -1 || endTri == -1)
+	{
+		PEINFO("NavmeshComponent::findPath: Failed to find valid start/end triangles\n");
+		return false;
+	}
+
+	// Find triangle path using A*
+	Array<PrimitiveTypes::UInt32> trianglePath(*m_pContext, m_arena);
+	if (!findTrianglePath(startTri, endTri, trianglePath))
+	{
+		PEINFO("NavmeshComponent::findPath: A* failed to find path\n");
+		return false;
+	}
+
+	// Convert triangle path to waypoints
+	trianglePathToWaypoints(trianglePath, outPath);
+
+	// Add start and end positions as first and last waypoints
+	if (outPath.m_size > 0)
+	{
+		// Replace first waypoint with actual start position
+		outPath[0] = startPos;
+
+		// Replace last waypoint with actual end position
+		outPath[outPath.m_size - 1] = endPos;
+	}
+
+	PEINFO("NavmeshComponent::findPath: Found path with %d waypoints\n", outPath.m_size);
+	return true;
+}
+
+bool NavmeshComponent::findTrianglePath(PrimitiveTypes::Int32 startTriIndex, PrimitiveTypes::Int32 endTriIndex,
+                                         Array<PrimitiveTypes::UInt32>& outTrianglePath)
+{
+	// Early exit if start == end
+	if (startTriIndex == endTriIndex)
+	{
+		outTrianglePath.reset(1);
+		outTrianglePath.add((PrimitiveTypes::UInt32)startTriIndex);
+		return true;
+	}
+
+	// A* data structures
+	Array<AStarNode> openList(*m_pContext, m_arena);  // Nodes to explore
+	Array<AStarNode> closedList(*m_pContext, m_arena);  // Nodes already explored
+	Array<bool> inClosed(*m_pContext, m_arena);  // Quick lookup: is triangle in closed list?
+
+	// Initialize closed list tracker
+	inClosed.reset(m_triangles.m_size);
+	for (PrimitiveTypes::UInt32 i = 0; i < m_triangles.m_size; i++)
+		inClosed.add(false);
+
+	// Get goal triangle center for heuristic
+	const NavmeshTriangle& endTri = m_triangles[endTriIndex];
+	const Vector3& goalPos = endTri.center;
+
+	// Add start node to open list
+	const NavmeshTriangle& startTri = m_triangles[startTriIndex];
+	float heuristic = (startTri.center - goalPos).length();
+	openList.add(AStarNode(startTriIndex, 0.0f, heuristic, -1));
+
+	// A* main loop
+	while (openList.m_size > 0)
+	{
+		// Find node with lowest fCost in open list
+		PrimitiveTypes::UInt32 bestIndex = 0;
+		float bestFCost = openList[0].fCost;
+		for (PrimitiveTypes::UInt32 i = 1; i < openList.m_size; i++)
+		{
+			if (openList[i].fCost < bestFCost)
+			{
+				bestIndex = i;
+				bestFCost = openList[i].fCost;
+			}
+		}
+
+		// Move best node from open to closed list
+		AStarNode current = openList[bestIndex];
+		openList.remove(bestIndex);
+
+		PrimitiveTypes::Int32 currentClosedIndex = (PrimitiveTypes::Int32)closedList.m_size;
+		closedList.add(current);
+		inClosed[current.triangleIndex] = true;
+
+		// Check if we reached the goal
+		if ((PrimitiveTypes::Int32)current.triangleIndex == endTriIndex)
+		{
+			// Reconstruct path by following parent indices backwards
+			Array<PrimitiveTypes::UInt32> reversePath(*m_pContext, m_arena);
+			PrimitiveTypes::Int32 nodeIndex = currentClosedIndex;
+
+			while (nodeIndex != -1)
+			{
+				const AStarNode& node = closedList[nodeIndex];
+				reversePath.add(node.triangleIndex);
+				nodeIndex = node.parentIndex;
+			}
+
+			// Reverse the path (we built it backwards)
+			outTrianglePath.reset(reversePath.m_size);
+			for (PrimitiveTypes::Int32 i = (PrimitiveTypes::Int32)reversePath.m_size - 1; i >= 0; i--)
+			{
+				outTrianglePath.add(reversePath[i]);
+			}
+
+			return true;
+		}
+
+		// Explore neighbors
+		const NavmeshTriangle& currentTri = m_triangles[current.triangleIndex];
+
+		for (int i = 0; i < 3; i++)
+		{
+			PrimitiveTypes::Int32 neighborIndex = currentTri.neighbors[i];
+
+			// Skip if no neighbor on this edge
+			if (neighborIndex == -1)
+				continue;
+
+			// Skip if already in closed list
+			if (inClosed[neighborIndex])
+				continue;
+
+			// Calculate cost to reach this neighbor
+			const NavmeshTriangle& neighborTri = m_triangles[neighborIndex];
+			float edgeCost = (neighborTri.center - currentTri.center).length();
+			float newGCost = current.gCost + edgeCost;
+
+			// Check if neighbor is already in open list
+			bool inOpen = false;
+			PrimitiveTypes::UInt32 openIndex = 0;
+			for (PrimitiveTypes::UInt32 j = 0; j < openList.m_size; j++)
+			{
+				if ((PrimitiveTypes::Int32)openList[j].triangleIndex == neighborIndex)
+				{
+					inOpen = true;
+					openIndex = j;
+					break;
+				}
+			}
+
+			if (inOpen)
+			{
+				// If we found a better path to this neighbor, update it
+				if (newGCost < openList[openIndex].gCost)
+				{
+					openList[openIndex].gCost = newGCost;
+					openList[openIndex].fCost = newGCost + openList[openIndex].hCost;
+					openList[openIndex].parentIndex = currentClosedIndex;
+				}
+			}
+			else
+			{
+				// Add neighbor to open list
+				float heuristic = (neighborTri.center - goalPos).length();
+				openList.add(AStarNode(neighborIndex, newGCost, heuristic, currentClosedIndex));
+			}
+		}
+	}
+
+	// No path found
+	return false;
+}
+
+void NavmeshComponent::trianglePathToWaypoints(const Array<PrimitiveTypes::UInt32>& trianglePath, Array<Vector3>& outWaypoints)
+{
+	outWaypoints.reset(trianglePath.m_size);
+
+	for (PrimitiveTypes::UInt32 i = 0; i < trianglePath.m_size; i++)
+	{
+		const NavmeshTriangle& tri = m_triangles[trianglePath[i]];
+		outWaypoints.add(tri.center);
+	}
+}
+
 }; // namespace Components
 }; // namespace PE

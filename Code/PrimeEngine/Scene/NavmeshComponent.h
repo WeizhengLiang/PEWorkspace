@@ -148,6 +148,25 @@ struct NavmeshComponent : public Component
 	PrimitiveTypes::Float32 getDistanceToTriangle(const Vector3& point, PrimitiveTypes::UInt32 triangleIndex) const;
 
 	// ========================================================================
+	// Pathfinding
+	// ========================================================================
+
+	// A* pathfinding: Find path from start position to end position
+	// Returns true if path found, false otherwise
+	// outPath will contain waypoint positions along the path
+	bool findPath(const Vector3& startPos, const Vector3& endPos, Array<Vector3>& outPath);
+
+	// A* on triangle graph: Find path from start triangle to end triangle
+	// Returns true if path found, false otherwise
+	// outTrianglePath will contain triangle indices along the path
+	bool findTrianglePath(PrimitiveTypes::Int32 startTriIndex, PrimitiveTypes::Int32 endTriIndex,
+	                      Array<PrimitiveTypes::UInt32>& outTrianglePath);
+
+	// Convert triangle path to waypoint positions
+	// Uses triangle centers as waypoints (can be improved with string pulling later)
+	void trianglePathToWaypoints(const Array<PrimitiveTypes::UInt32>& trianglePath, Array<Vector3>& outWaypoints);
+
+	// ========================================================================
 	// Accessors
 	// ========================================================================
 
