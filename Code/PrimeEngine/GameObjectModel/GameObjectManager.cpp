@@ -407,6 +407,54 @@ void GameObjectManager::do_CREATE_MESH(Events::Event *pEvt)
 				if (strstr(meshName, "nazicar") != nullptr)
 				{
 					pPhysics->isNavmeshObstacle = true;
+
+					// Compute initial world-space AABB immediately for navmesh usage
+					Matrix4x4 worldTransform = pParentSN->m_base;
+					Vector3 localMin = aabb.center - aabb.extents;
+					Vector3 localMax = aabb.center + aabb.extents;
+					Vector3 localCorners[8] = {
+						Vector3(localMin.m_x, localMin.m_y, localMin.m_z),
+						Vector3(localMax.m_x, localMin.m_y, localMin.m_z),
+						Vector3(localMax.m_x, localMax.m_y, localMin.m_z),
+						Vector3(localMin.m_x, localMax.m_y, localMin.m_z),
+						Vector3(localMin.m_x, localMin.m_y, localMax.m_z),
+						Vector3(localMax.m_x, localMin.m_y, localMax.m_z),
+						Vector3(localMax.m_x, localMax.m_y, localMax.m_z),
+						Vector3(localMin.m_x, localMax.m_y, localMax.m_z)
+					};
+
+					Vector3 worldCorners[8];
+					for (int j = 0; j < 8; ++j)
+					{
+						worldCorners[j] = worldTransform * localCorners[j];
+					}
+
+					pPhysics->worldAABBMin = worldCorners[0];
+					pPhysics->worldAABBMax = worldCorners[0];
+					for (int j = 1; j < 8; ++j)
+					{
+						if (worldCorners[j].m_x < pPhysics->worldAABBMin.m_x) pPhysics->worldAABBMin.m_x = worldCorners[j].m_x;
+						if (worldCorners[j].m_y < pPhysics->worldAABBMin.m_y) pPhysics->worldAABBMin.m_y = worldCorners[j].m_y;
+						if (worldCorners[j].m_z < pPhysics->worldAABBMin.m_z) pPhysics->worldAABBMin.m_z = worldCorners[j].m_z;
+
+						if (worldCorners[j].m_x > pPhysics->worldAABBMax.m_x) pPhysics->worldAABBMax.m_x = worldCorners[j].m_x;
+						if (worldCorners[j].m_y > pPhysics->worldAABBMax.m_y) pPhysics->worldAABBMax.m_y = worldCorners[j].m_y;
+						if (worldCorners[j].m_z > pPhysics->worldAABBMax.m_z) pPhysics->worldAABBMax.m_z = worldCorners[j].m_z;
+					}
+
+					const float MIN_AABB_THICKNESS = 0.1f;
+					auto ensureThickness = [&](float &minVal, float &maxVal)
+					{
+						if (maxVal - minVal < MIN_AABB_THICKNESS)
+						{
+							float center = (minVal + maxVal) * 0.5f;
+							minVal = center - MIN_AABB_THICKNESS * 0.5f;
+							maxVal = center + MIN_AABB_THICKNESS * 0.5f;
+						}
+					};
+					ensureThickness(pPhysics->worldAABBMin.m_x, pPhysics->worldAABBMax.m_x);
+					ensureThickness(pPhysics->worldAABBMin.m_y, pPhysics->worldAABBMax.m_y);
+					ensureThickness(pPhysics->worldAABBMin.m_z, pPhysics->worldAABBMax.m_z);
 				}
 				
 				// Removed: Spammy during level load (creates log for every static mesh)
