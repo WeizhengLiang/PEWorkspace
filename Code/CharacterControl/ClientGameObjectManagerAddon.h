@@ -56,6 +56,7 @@ struct ClientGameObjectManagerAddon : public GameObjectManagerAddon
 	WayPoint *getWayPoint(const char *name);
 	SoldierNPC *getFirstTargetableSoldierObject();
 	bool getRandomNavmeshCorner(Vector3 &outPos);
+	bool visualizeNavmeshPath(const Vector3 &start, const Vector3 &end);
 
 	// Navmesh for pathfinding
 	PE::Handle m_hNavmesh;

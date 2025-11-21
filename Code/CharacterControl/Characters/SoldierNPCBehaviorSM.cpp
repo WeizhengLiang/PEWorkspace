@@ -37,6 +37,8 @@ void SoldierNPCBehaviorSM::start()
 	else
 	{
 		ClientGameObjectManagerAddon *pAddon = (ClientGameObjectManagerAddon *)(m_pContext->get<CharacterControlContext>()->getGameObjectManagerAddon());
+		Vector3 currentPos;
+		bool hasPos = getSoldierWorldPosition(currentPos);
 		Vector3 fallbackPos;
 		if (pAddon && pAddon->getRandomNavmeshCorner(fallbackPos))
 		{
@@ -49,6 +51,11 @@ void SoldierNPCBehaviorSM::start()
 			pEvt->m_running = false;
 			m_hMovementSM.getObject<Component>()->handleEvent(pEvt);
 			h.release();
+
+			if (hasPos)
+			{
+				pAddon->visualizeNavmeshPath(currentPos, fallbackPos);
+			}
 		}
 		else
 		{
@@ -184,6 +191,8 @@ void SoldierNPCBehaviorSM::do_SoldierNPCMovementSM_Event_TARGET_REACHED(PE::Even
 		ClientGameObjectManagerAddon *pAddon = (ClientGameObjectManagerAddon *)(m_pContext->get<CharacterControlContext>()->getGameObjectManagerAddon());
 		Vector3 nextCorner;
 		bool foundCorner = false;
+		Vector3 currentPos;
+		bool hasPos = getSoldierWorldPosition(currentPos);
 
 		if (pAddon)
 		{
@@ -219,6 +228,11 @@ void SoldierNPCBehaviorSM::do_SoldierNPCMovementSM_Event_TARGET_REACHED(PE::Even
 			pEvt->m_running = false;
 			m_hMovementSM.getObject<Component>()->handleEvent(pEvt);
 			h.release();
+
+			if (hasPos)
+			{
+				pAddon->visualizeNavmeshPath(currentPos, nextCorner);
+			}
 		}
 		else
 		{
@@ -226,6 +240,24 @@ void SoldierNPCBehaviorSM::do_SoldierNPCMovementSM_Event_TARGET_REACHED(PE::Even
 			m_hasFallbackCorner = false;
 		}
 	}
+}
+
+bool SoldierNPCBehaviorSM::getSoldierWorldPosition(Vector3 &outPos)
+{
+	SoldierNPC *pSol = getFirstParentByTypePtr<SoldierNPC>();
+	if (!pSol)
+		return false;
+
+	PE::Handle hSoldierSceneNode = pSol->getFirstComponentHandle<PE::Components::SceneNode>();
+	if (!hSoldierSceneNode.isValid())
+		return false;
+
+	SceneNode *pSN = hSoldierSceneNode.getObject<SceneNode>();
+	if (!pSN)
+		return false;
+
+	outPos = pSN->m_base.getPos();
+	return true;
 }
 
 // this event is executed when thread has RC

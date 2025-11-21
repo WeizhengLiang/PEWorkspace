@@ -55,6 +55,8 @@ struct SoldierNPCBehaviorSM : public PE::Components::Component
 	States m_state;
 	Vector3 m_fallbackCornerTarget;
 	bool m_hasFallbackCorner;
+
+	bool getSoldierWorldPosition(Vector3 &outPos);
 };
 
 };
