@@ -181,8 +181,50 @@ void SoldierNPCBehaviorSM::do_SoldierNPCMovementSM_Event_TARGET_REACHED(PE::Even
 	}
 	else if (m_state == MOVING_TO_CORNER)
 	{
-		m_state = IDLE;
-		m_hasFallbackCorner = false;
+		ClientGameObjectManagerAddon *pAddon = (ClientGameObjectManagerAddon *)(m_pContext->get<CharacterControlContext>()->getGameObjectManagerAddon());
+		Vector3 nextCorner;
+		bool foundCorner = false;
+
+		if (pAddon)
+		{
+			const int maxAttempts = 8;
+			for (int attempt = 0; attempt < maxAttempts; ++attempt)
+			{
+				if (!pAddon->getRandomNavmeshCorner(nextCorner))
+					break;
+
+				if (!m_hasFallbackCorner)
+				{
+					foundCorner = true;
+					break;
+				}
+
+				Vector3 diff = nextCorner - m_fallbackCornerTarget;
+				if (diff.length() > 0.1f)
+				{
+					foundCorner = true;
+					break;
+				}
+			}
+		}
+
+		if (foundCorner)
+		{
+			m_state = MOVING_TO_CORNER;
+			m_fallbackCornerTarget = nextCorner;
+			m_hasFallbackCorner = true;
+
+			PE::Handle h("SoldierNPCMovementSM_Event_MOVE_TO", sizeof(SoldierNPCMovementSM_Event_MOVE_TO));
+			SoldierNPCMovementSM_Event_MOVE_TO *pEvt = new(h) SoldierNPCMovementSM_Event_MOVE_TO(nextCorner);
+			pEvt->m_running = false;
+			m_hMovementSM.getObject<Component>()->handleEvent(pEvt);
+			h.release();
+		}
+		else
+		{
+			m_state = IDLE;
+			m_hasFallbackCorner = false;
+		}
 	}
 }
 
